@@ -10,7 +10,6 @@ This repo builds a small multi-agent pipeline for trade document validation:
 4. Store verified output in SQLite and answer simple grounded questions.
 5. Show the full run state in a React workspace backed by a Flask API.
 
-The app is intentionally shaped so Part 2 can add an inbox/folder trigger and multi-document shipment validation without replacing the Part 1 agents.
 
 ## Setup
 
