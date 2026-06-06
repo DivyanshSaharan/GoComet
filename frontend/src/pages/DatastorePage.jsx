@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, Database, Send, XCircle } from "lucide-react";
+import { CheckCircle2, Database, LoaderCircle, Send, XCircle } from "lucide-react";
 import { askDatastore, getRun, getRunDocument, listRuns, updateRunAction } from "../api.js";
 import { DocumentEvidence, FieldTable, formatDate, statusLabel, ValidationList } from "../components/Shared.jsx";
 
@@ -12,6 +12,7 @@ export function DatastorePage() {
   const [notes, setNotes] = useState({});
   const [question, setQuestion] = useState("how many shipments were flagged this week?");
   const [queryResult, setQueryResult] = useState(null);
+  const [queryBusy, setQueryBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -80,14 +81,14 @@ export function DatastorePage() {
     if (!question.trim()) {
       return;
     }
-    setBusy(true);
+    setQueryBusy(true);
     setError("");
     try {
       setQueryResult(await askDatastore(question.trim()));
     } catch (err) {
       setError(err.message);
     } finally {
-      setBusy(false);
+      setQueryBusy(false);
     }
   }
 
@@ -116,8 +117,8 @@ export function DatastorePage() {
               placeholder="How many shipments were flagged this week?"
             />
           </div>
-          <button type="submit" disabled={busy}>
-            <Send size={17} /> Ask
+          <button type="submit" disabled={queryBusy}>
+            {queryBusy ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />} Ask
           </button>
         </form>
         {queryResult ? (
