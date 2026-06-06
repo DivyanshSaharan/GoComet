@@ -68,7 +68,7 @@ export function DocumentEvidence({ run, documentText, documentUrl }) {
       <div className="documentPreview">
         <div className="previewHeader">
           <strong>Source document</strong>
-          {documentUrl ? <a href={documentUrl} target="_blank" rel="noreferrer">Open full document</a> : null}
+          {documentUrl ? <a href={documentUrl} download={run.document_name || true}>Download actual document</a> : null}
         </div>
         {documentText ? <pre>{documentText}</pre> : null}
         {!documentText && isImage ? <img src={documentUrl} alt={run.document_name || "Source document"} /> : null}
