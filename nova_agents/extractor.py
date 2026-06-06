@@ -23,7 +23,8 @@ FIELD_PATTERNS = {
 
 class ExtractorAgent:
     def __init__(self, use_llm: bool | None = None) -> None:
-        self.use_llm = bool(os.getenv("OPENAI_API_KEY")) if use_llm is None else use_llm
+        has_key = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY"))
+        self.use_llm = has_key if use_llm is None else use_llm
 
     def run(self, document_path: str | Path) -> ExtractionResult:
         path = Path(document_path)
@@ -69,10 +70,40 @@ class ExtractorAgent:
             )
         warnings = []
         if not text.strip():
-            warnings.append("No readable text found. Configure OPENAI_API_KEY for vision extraction on scanned documents.")
+            warnings.append("No readable text found. Configure GEMINI_API_KEY for vision extraction on scanned documents.")
         return ExtractionResult(path.name, fields, provider="local-patterns", raw_text=text, warnings=warnings)
 
     def _extract_with_llm(self, path: Path, text: str) -> ExtractionResult:
+        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+            return self._extract_with_gemini(path, text)
+        return self._extract_with_openai(path, text)
+
+    def _extract_with_gemini(self, path: Path, text: str) -> ExtractionResult:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client()
+        prompt = (
+            "Extract trade document fields as strict JSON. Return an object where every key is one of "
+            f"{', '.join(REQUIRED_FIELDS)}. Each value must be an object with value, confidence, and "
+            "source_snippet. Confidence must be a number from 0 to 1. Use null when a field is not present."
+        )
+        contents: list = [prompt]
+        if text.strip():
+            contents.append(text[:12000])
+        else:
+            mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            contents.append(types.Part.from_bytes(data=path.read_bytes(), mime_type=mime_type))
+
+        response = client.models.generate_content(
+            model=os.getenv("NOVA_EXTRACTOR_MODEL", "gemini-2.5-flash"),
+            contents=contents,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        payload = json.loads(response.text or "{}")
+        return self._payload_to_result(path, text, payload, provider="gemini-vision")
+
+    def _extract_with_openai(self, path: Path, text: str) -> ExtractionResult:
         from openai import OpenAI
 
         client = OpenAI()
@@ -99,6 +130,9 @@ class ExtractorAgent:
             text={"format": {"type": "json_object"}},
         )
         payload = json.loads(response.output_text)
+        return self._payload_to_result(path, text, payload, provider="openai-vision")
+
+    def _payload_to_result(self, path: Path, text: str, payload: dict, provider: str) -> ExtractionResult:
         fields = {}
         for name in REQUIRED_FIELDS:
             item = payload.get(name) or {}
@@ -107,9 +141,9 @@ class ExtractorAgent:
                 value=item.get("value"),
                 confidence=float(item.get("confidence") or 0),
                 source_snippet=item.get("source_snippet") or "",
-                evidence="vision_llm",
+                evidence=provider,
             )
-        return ExtractionResult(path.name, fields, provider="openai-vision", raw_text=text)
+        return ExtractionResult(path.name, fields, provider=provider, raw_text=text)
 
     def _snippet(self, text: str, value: str | None) -> str:
         if not value:
@@ -120,4 +154,3 @@ class ExtractorAgent:
         start = max(index - 60, 0)
         end = min(index + len(value) + 60, len(text))
         return " ".join(text[start:end].split())
-

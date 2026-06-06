@@ -87,14 +87,13 @@ how many were approved?
 
 ## Vision LLM Extraction
 
-The extractor is provider-based. By default it uses local text extraction so the project runs without credentials. For scanned images or image-only PDFs, install the optional OpenAI package and set:
+The extractor is provider-based. By default it uses local text extraction so the project runs without credentials. For scanned images or image-only PDFs, set a Gemini key before running the backend:
 
-```bash
-pip install openai
-set OPENAI_API_KEY=your_key
+```powershell
+$env:GEMINI_API_KEY="your_key"
 ```
 
-The extractor will use `NOVA_EXTRACTOR_MODEL` if set, otherwise `gpt-4.1-mini`, and will fall back to local extraction if the LLM call fails.
+The extractor will use `NOVA_EXTRACTOR_MODEL` if set, otherwise `gemini-2.5-flash`, and will fall back to local extraction if the LLM call fails. Keep API keys in environment variables only; do not commit them.
 
 ## Test
 
