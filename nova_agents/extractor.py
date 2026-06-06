@@ -107,7 +107,7 @@ class ExtractorAgent:
             contents=contents,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        payload = json.loads(response.text or "{}")
+        payload = self._parse_payload(response.text or "{}")
         return self._payload_to_result(path, text, payload, provider="gemini-vision")
 
     def _extract_with_openai(self, path: Path, text: str) -> ExtractionResult:
@@ -136,10 +136,12 @@ class ExtractorAgent:
             input=[{"role": "user", "content": content}],
             text={"format": {"type": "json_object"}},
         )
-        payload = json.loads(response.output_text)
+        payload = self._parse_payload(response.output_text)
         return self._payload_to_result(path, text, payload, provider="openai-vision")
 
     def _payload_to_result(self, path: Path, text: str, payload: dict, provider: str) -> ExtractionResult:
+        if "fields" in payload and isinstance(payload["fields"], dict):
+            payload = payload["fields"]
         fields = {}
         for name in REQUIRED_FIELDS:
             item = payload.get(name) or {}
@@ -151,6 +153,18 @@ class ExtractorAgent:
                 evidence=provider,
             )
         return ExtractionResult(path.name, fields, provider=provider, raw_text=text)
+
+    def _parse_payload(self, content: str) -> dict:
+        cleaned = content.strip()
+        fenced = re.search(r"```(?:json)?\s*(.*?)```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+        if fenced:
+            cleaned = fenced.group(1).strip()
+        if not cleaned.startswith("{"):
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start >= 0 and end > start:
+                cleaned = cleaned[start : end + 1]
+        return json.loads(cleaned or "{}")
 
     def _snippet(self, text: str, value: str | None) -> str:
         if not value:

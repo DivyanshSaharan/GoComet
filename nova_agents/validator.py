@@ -13,7 +13,7 @@ class ValidatorAgent:
         results = []
         for field_name, rule in self.rule_set["rules"].items():
             field = extraction.fields[field_name]
-            status, reason = self._evaluate(field.value, field.confidence, rule)
+            status, reason = self._evaluate(field.value, field.confidence, field.source_snippet, rule)
             results.append(
                 ValidationResult(
                     field_name=field_name,
@@ -27,11 +27,19 @@ class ValidatorAgent:
             )
         return results
 
-    def _evaluate(self, found: str | None, confidence: float, rule: dict) -> tuple[ValidationStatus, str]:
+    def _evaluate(
+        self,
+        found: str | None,
+        confidence: float,
+        source_snippet: str,
+        rule: dict,
+    ) -> tuple[ValidationStatus, str]:
         if not found:
             return ValidationStatus.UNCERTAIN, "Required field was not found in the document."
         if confidence < 0.7:
             return ValidationStatus.UNCERTAIN, "Extraction confidence is below approval threshold."
+        if not source_snippet.strip():
+            return ValidationStatus.UNCERTAIN, "Extraction has no source evidence from the document."
 
         rule_type = rule["type"]
         expected = rule["expected"]
@@ -65,4 +73,3 @@ class ValidatorAgent:
             return ", ".join(str(item) for item in expected)
         suffix = f" {rule['unit']}" if "unit" in rule else ""
         return f"{expected}{suffix}"
-

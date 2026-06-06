@@ -2,8 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from nova_agents.extractor import ExtractorAgent
+from nova_agents.models import ExtractedField, ExtractionResult
 from nova_agents.pipeline import TradeDocumentPipeline
 from nova_agents.storage import RunStore
+from nova_agents.validator import ValidatorAgent
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +96,40 @@ class PipelineTest(unittest.TestCase):
             self.assertIsNone(store.run_by_id(run.id))
             self.assertEqual(store.list_runs(), [])
             self.assertFalse(store.delete_run(run.id))
+
+    def test_extractor_parses_fenced_nested_json(self) -> None:
+        payload = ExtractorAgent(use_llm=False)._parse_payload(
+            'Here is your JSON:\n```json\n{"fields":{"invoice_number":{"value":"INV-1","confidence":0.91,"source_snippet":"Invoice Number: INV-1"}}}\n```'
+        )
+        result = ExtractorAgent(use_llm=False)._payload_to_result(
+            ROOT / "samples" / "clean_invoice.txt",
+            "",
+            payload,
+            "test",
+        )
+
+        self.assertEqual(result.fields["invoice_number"].value, "INV-1")
+        self.assertEqual(result.fields["invoice_number"].source_snippet, "Invoice Number: INV-1")
+
+    def test_validator_requires_source_evidence(self) -> None:
+        fields = {}
+        for name in [
+            "consignee_name",
+            "hs_code",
+            "port_of_loading",
+            "port_of_discharge",
+            "incoterms",
+            "description_of_goods",
+            "gross_weight",
+            "invoice_number",
+        ]:
+            fields[name] = ExtractedField(name=name, value="ACME GLOBAL TRADING LTD", confidence=0.95)
+        extraction = ExtractionResult("unsupported.txt", fields, "test")
+
+        result = ValidatorAgent(ROOT / "rules" / "acme_customer.json").run(extraction)
+
+        self.assertTrue(any(item.status.value == "uncertain" for item in result))
+        self.assertIn("source evidence", result[0].reason)
 
 
 if __name__ == "__main__":
