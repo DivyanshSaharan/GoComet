@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Database,
   FileSearch,
+  LoaderCircle,
   Play,
   RefreshCw,
   Search,
@@ -89,13 +90,20 @@ function App() {
 
   return (
     <main className="workspace">
+      {busy ? (
+        <div className="processingBanner" role="status">
+          <LoaderCircle className="spin" size={18} />
+          Running extractor, validator, and router agents
+        </div>
+      ) : null}
+
       <section className="mast">
         <div>
-          <p className="eyebrow">Nova · Trade Document Validation</p>
+          <p className="eyebrow">Nova / Trade Document Validation</p>
           <h1>CG document review workspace</h1>
         </div>
-        <button className="ghost" onClick={loadLatest}>
-          <RefreshCw size={18} /> Refresh
+        <button className="ghost" onClick={loadLatest} disabled={busy}>
+          <RefreshCw className={busy ? "spin" : ""} size={18} /> Refresh
         </button>
       </section>
 
@@ -104,13 +112,13 @@ function App() {
           <Upload size={20} />
           <input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} />
           <button onClick={uploadAndRun} disabled={busy}>
-            <FileSearch size={18} /> Validate Upload
+            {busy ? <LoaderCircle className="spin" size={18} /> : <FileSearch size={18} />} Validate Upload
           </button>
         </div>
         <div className="sampleBox">
           <input value={samplePath} onChange={(event) => setSamplePath(event.target.value)} />
           <button onClick={() => runSample()} disabled={busy}>
-            <Play size={18} /> Run Path
+            {busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} />} Run Path
           </button>
           <button className="ghost" onClick={() => runSample("samples/messy_invoice.txt")} disabled={busy}>
             <AlertTriangle size={18} /> Messy Sample
@@ -121,10 +129,19 @@ function App() {
       {error ? <div className="error">{error}</div> : null}
 
       <section className="summary">
-        <Metric label="Document" value={run?.document_name || "No run yet"} />
-        <Metric label="Decision" value={run?.decision_outcome || run?.decision?.outcome || "-"} />
-        <Metric label="Matched" value={counts.matches} />
-        <Metric label="Issues" value={counts.mismatches + counts.uncertain} />
+        <Metric label="Document" value={run?.document_name || "No run yet"} tone="neutral" />
+        <Metric label="Decision" value={run?.decision_outcome || run?.decision?.outcome || "-"} tone={decisionTone(run)} />
+        <Metric label="Matched" value={counts.matches} tone="good" />
+        <Metric label="Issues" value={counts.mismatches + counts.uncertain} tone={counts.mismatches + counts.uncertain ? "bad" : "good"} />
+      </section>
+
+      <section className="pipelineSteps" aria-label="Pipeline status">
+        {["Extract", "Validate", "Route", "Store"].map((step, index) => (
+          <div className={`step ${run ? "done" : ""}`} key={step}>
+            <span>{run ? <CheckCircle2 size={15} /> : index + 1}</span>
+            {step}
+          </div>
+        ))}
       </section>
 
       <section className="contentGrid">
@@ -154,9 +171,9 @@ function App() {
   );
 }
 
-function Metric({ label, value }) {
+function Metric({ label, value, tone }) {
   return (
-    <div className="metric">
+    <div className={`metric ${tone || "neutral"}`}>
       <span>{label}</span>
       <strong>{String(value)}</strong>
     </div>
@@ -203,7 +220,7 @@ function ValidationList({ rows }) {
           </div>
           <div className="validationMeta">
             <span>{item.status}</span>
-            {item.status !== "match" ? <small>Found: {item.found || "-"} · Expected: {item.expected || "-"}</small> : null}
+            {item.status !== "match" ? <small>Found: {item.found || "-"} / Expected: {item.expected || "-"}</small> : null}
           </div>
         </article>
       ))}
@@ -248,6 +265,17 @@ function decisionText(run) {
 
 function labelize(value) {
   return String(value || "").replaceAll("_", " ");
+}
+
+function decisionTone(run) {
+  const outcome = run?.decision_outcome || run?.decision?.outcome;
+  if (outcome === "auto_approve") {
+    return "good";
+  }
+  if (outcome === "amendment_request") {
+    return "bad";
+  }
+  return "warn";
 }
 
 createRoot(document.getElementById("root")).render(<App />);
