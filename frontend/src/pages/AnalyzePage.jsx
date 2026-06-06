@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { CheckCircle2, FileSearch, LoaderCircle, ShieldCheck, Upload } from "lucide-react";
+import { CheckCircle2, Database, FileSearch, LoaderCircle, ShieldCheck, Upload, XCircle } from "lucide-react";
 import { analyzeFile } from "../api.js";
 import { Metric } from "../components/Shared.jsx";
 
-const MIN_PROCESSING_MS = 15000;
+const MIN_PROCESSING_MS = 10000;
 
-export function AnalyzePage() {
+export function AnalyzePage({ onReview }) {
   const [files, setFiles] = useState([]);
   const [phase, setPhase] = useState("upload");
   const [result, setResult] = useState(null);
@@ -36,7 +36,9 @@ export function AnalyzePage() {
       }
       setResult({
         approved: runs.filter((run) => run.review_status === "approved").length,
-        flagged: runs.filter((run) => run.review_status === "flagged").length
+        flagged: runs.filter((run) => run.review_status === "flagged").length,
+        rejected: runs.filter((run) => run.review_status === "rejected").length,
+        rejectedDuplicate: runs.length === 1 && runs[0].review_status === "rejected" && runs[0].reused_existing
       });
       setPhase("complete");
     } catch (err) {
@@ -50,16 +52,29 @@ export function AnalyzePage() {
       <section className="processingPage">
         <LoaderCircle className="spin" size={42} />
         <h1>Processing invoices</h1>
-        <p>Extractor, validator, router, and datastore agents are running. This view stays up for at least 15 seconds.</p>
+        <p>Extractor, validator, router, and datastore agents are running.</p>
       </section>
     );
   }
 
   if (phase === "complete" && result) {
+    if (result.rejectedDuplicate || (result.rejected > 0 && result.approved === 0 && result.flagged === 0)) {
+      return (
+        <section className="analysisComplete">
+          <div className="resultOnly single">
+            <Metric icon={<XCircle size={22} />} label="Rejected" value="Already processed and rejected" tone="bad" />
+          </div>
+          <ReviewCta onReview={onReview} />
+        </section>
+      );
+    }
     return (
-      <section className="resultOnly">
-        <Metric icon={<CheckCircle2 size={22} />} label="Auto Approved" value={result.approved} tone="good" />
-        <Metric icon={<ShieldCheck size={22} />} label="Flagged" value={result.flagged} tone={result.flagged ? "warn" : "good"} />
+      <section className="analysisComplete">
+        <div className="resultOnly">
+          <Metric icon={<CheckCircle2 size={22} />} label="Auto Approved" value={result.approved} tone="good" />
+          <Metric icon={<ShieldCheck size={22} />} label="Flagged" value={result.flagged} tone={result.flagged ? "warn" : "good"} />
+        </div>
+        <ReviewCta onReview={onReview} />
       </section>
     );
   }
@@ -92,5 +107,16 @@ export function AnalyzePage() {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function ReviewCta({ onReview }) {
+  return (
+    <div className="reviewCta">
+      <p>Open Datastore to review flagged or rejected invoices and take CG action.</p>
+      <button onClick={onReview}>
+        <Database size={18} /> Go to Datastore
+      </button>
+    </div>
+  );
 }
 

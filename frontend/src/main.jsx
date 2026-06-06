@@ -40,7 +40,7 @@ function App() {
 
       <section className="page">
         {page === "home" ? <HomePage onStart={() => setPage("analyze")} /> : null}
-        {page === "analyze" ? <AnalyzePage /> : null}
+        {page === "analyze" ? <AnalyzePage onReview={() => setPage("datastore")} /> : null}
         {page === "datastore" ? <DatastorePage /> : null}
       </section>
     </main>
