@@ -70,10 +70,12 @@ class PipelineRun:
     id: str
     document_name: str
     customer_id: str
+    document_fingerprint: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     extraction: ExtractionResult | None = None
     validations: list[ValidationResult] = field(default_factory=list)
     decision: Decision | None = None
+    reused_existing: bool = False
 
 
 def field_to_dict(field: ExtractedField) -> dict[str, Any]:
@@ -84,4 +86,3 @@ def field_to_dict(field: ExtractedField) -> dict[str, Any]:
         "source_snippet": field.source_snippet,
         "evidence": field.evidence,
     }
-

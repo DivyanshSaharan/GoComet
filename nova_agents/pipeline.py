@@ -1,4 +1,5 @@
 from pathlib import Path
+from hashlib import sha256
 from uuid import uuid4
 
 from .extractor import ExtractorAgent
@@ -21,10 +22,27 @@ class TradeDocumentPipeline:
 
     def run(self, document_path: str | Path, customer_id: str = "acme-global") -> PipelineRun:
         document = Path(document_path)
-        run = PipelineRun(id=str(uuid4()), document_name=document.name, customer_id=customer_id)
+        fingerprint = self._fingerprint(document)
+        existing = self.store.find_by_fingerprint(customer_id, fingerprint)
+        if existing:
+            existing.reused_existing = True
+            return existing
+
+        run = PipelineRun(
+            id=str(uuid4()),
+            document_name=document.name,
+            customer_id=customer_id,
+            document_fingerprint=fingerprint,
+        )
         run.extraction = self.extractor.run(document)
         run.validations = self.validator.run(run.extraction)
         run.decision = self.router.run(run.validations)
         self.store.save(run)
         return run
 
+    def _fingerprint(self, document: Path) -> str:
+        digest = sha256()
+        with document.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()

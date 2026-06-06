@@ -3,7 +3,16 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
-from .models import PipelineRun, field_to_dict
+from .models import (
+    Decision,
+    DecisionOutcome,
+    ExtractedField,
+    ExtractionResult,
+    PipelineRun,
+    ValidationResult,
+    ValidationStatus,
+    field_to_dict,
+)
 
 
 class RunStore:
@@ -17,13 +26,14 @@ class RunStore:
             conn.execute(
                 """
                 insert or replace into runs
-                (id, document_name, customer_id, created_at, provider, decision_outcome, reasoning, draft_message)
-                values (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, document_name, customer_id, document_fingerprint, created_at, provider, decision_outcome, reasoning, draft_message)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.id,
                     run.document_name,
                     run.customer_id,
+                    run.document_fingerprint,
                     run.created_at,
                     run.extraction.provider if run.extraction else None,
                     run.decision.outcome.value if run.decision else None,
@@ -63,6 +73,24 @@ class RunStore:
                     ),
                 )
             conn.commit()
+
+    def find_by_fingerprint(self, customer_id: str, document_fingerprint: str) -> PipelineRun | None:
+        if not document_fingerprint:
+            return None
+        with closing(self._connect()) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                select * from runs
+                where customer_id = ? and document_fingerprint = ?
+                order by created_at desc
+                limit 1
+                """,
+                (customer_id, document_fingerprint),
+            ).fetchone()
+            if not row:
+                return None
+            return self._hydrate(conn, row)
 
     def latest_run(self) -> dict | None:
         with closing(self._connect()) as conn:
@@ -115,6 +143,7 @@ class RunStore:
                     id text primary key,
                     document_name text not null,
                     customer_id text not null,
+                    document_fingerprint text,
                     created_at text not null,
                     provider text,
                     decision_outcome text,
@@ -123,6 +152,7 @@ class RunStore:
                 )
                 """
             )
+            self._ensure_column(conn, "runs", "document_fingerprint", "text")
             conn.commit()
             conn.execute(
                 """
@@ -152,3 +182,58 @@ class RunStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                create unique index if not exists idx_runs_customer_fingerprint
+                on runs(customer_id, document_fingerprint)
+                where document_fingerprint is not null and document_fingerprint != ''
+                """
+            )
+            conn.commit()
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, column_type: str) -> None:
+        columns = {row[1] for row in conn.execute(f"pragma table_info({table})").fetchall()}
+        if column not in columns:
+            conn.execute(f"alter table {table} add column {column} {column_type}")
+
+    def _hydrate(self, conn: sqlite3.Connection, row: sqlite3.Row) -> PipelineRun:
+        run = PipelineRun(
+            id=row["id"],
+            document_name=row["document_name"],
+            customer_id=row["customer_id"],
+            document_fingerprint=row["document_fingerprint"] or "",
+            created_at=row["created_at"],
+        )
+        fields = {}
+        for field_row in conn.execute("select * from fields where run_id = ?", (run.id,)):
+            fields[field_row["name"]] = ExtractedField(
+                name=field_row["name"],
+                value=field_row["value"],
+                confidence=field_row["confidence"],
+                source_snippet=field_row["source_snippet"] or "",
+                evidence="stored",
+            )
+        run.extraction = ExtractionResult(
+            document_name=run.document_name,
+            fields=fields,
+            provider=row["provider"] or "stored",
+        )
+        run.validations = [
+            ValidationResult(
+                field_name=item["field_name"],
+                status=ValidationStatus(item["status"]),
+                found=item["found"],
+                expected=item["expected"],
+                confidence=item["confidence"],
+                reason=item["reason"],
+                source_snippet=item["source_snippet"] or "",
+            )
+            for item in conn.execute("select * from validations where run_id = ?", (run.id,))
+        ]
+        if row["decision_outcome"]:
+            run.decision = Decision(
+                outcome=DecisionOutcome(row["decision_outcome"]),
+                reasoning=row["reasoning"] or "",
+                draft_message=row["draft_message"] or "",
+            )
+        return run
