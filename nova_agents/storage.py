@@ -1,6 +1,7 @@
 import json
 import sqlite3
 from contextlib import closing
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import (
@@ -22,12 +23,14 @@ class RunStore:
         self._init()
 
     def save(self, run: PipelineRun) -> None:
+        review_status = run.review_status or self._default_status(run)
+        run.review_status = review_status
         with closing(self._connect()) as conn:
             conn.execute(
                 """
                 insert or replace into runs
-                (id, document_name, customer_id, document_fingerprint, document_path, created_at, provider, decision_outcome, reasoning, draft_message)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, document_name, customer_id, document_fingerprint, document_path, created_at, provider, decision_outcome, reasoning, draft_message, review_status, action_note, action_email, closed_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.id,
@@ -40,6 +43,10 @@ class RunStore:
                     run.decision.outcome.value if run.decision else None,
                     run.decision.reasoning if run.decision else None,
                     run.decision.draft_message if run.decision else None,
+                    review_status,
+                    run.action_note,
+                    run.action_email,
+                    run.closed_at,
                 ),
             )
             conn.execute("delete from fields where run_id = ?", (run.id,))
@@ -74,6 +81,63 @@ class RunStore:
                     ),
                 )
             conn.commit()
+
+    def list_runs(
+        self,
+        status: str | None = None,
+        name: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict]:
+        clauses = []
+        params = []
+        if status:
+            clauses.append("review_status = ?")
+            params.append(status)
+        if name:
+            clauses.append("lower(document_name) like ?")
+            params.append(f"%{name.lower()}%")
+        if date_from:
+            clauses.append("date(created_at) >= date(?)")
+            params.append(date_from)
+        if date_to:
+            clauses.append("date(created_at) <= date(?)")
+            params.append(date_to)
+        where = f"where {' and '.join(clauses)}" if clauses else ""
+        sql = f"""
+            select id, document_name, customer_id, created_at, decision_outcome, review_status,
+                   reasoning, action_note, action_email, closed_at
+            from runs
+            {where}
+            order by created_at desc
+        """
+        with closing(self._connect()) as conn:
+            conn.row_factory = sqlite3.Row
+            return [dict(row) for row in conn.execute(sql, params)]
+
+    def update_review_status(self, run_id: str, status: str, note: str = "") -> dict | None:
+        run = self.run_by_id(run_id)
+        if not run:
+            return None
+        email = self._action_email(run, status, note)
+        with closing(self._connect()) as conn:
+            conn.execute(
+                """
+                update runs
+                set review_status = ?, action_note = ?, action_email = ?
+                where id = ?
+                """,
+                (status, note, email, run_id),
+            )
+            conn.commit()
+        return self.run_by_id(run_id)
+
+    def close_run(self, run_id: str) -> dict | None:
+        closed_at = datetime.now(timezone.utc).isoformat()
+        with closing(self._connect()) as conn:
+            conn.execute("update runs set closed_at = ? where id = ?", (closed_at, run_id))
+            conn.commit()
+        return self.run_by_id(run_id)
 
     def find_by_fingerprint(self, customer_id: str, document_fingerprint: str) -> PipelineRun | None:
         if not document_fingerprint:
@@ -187,12 +251,20 @@ class RunStore:
                     provider text,
                     decision_outcome text,
                     reasoning text,
-                    draft_message text
+                    draft_message text,
+                    review_status text,
+                    action_note text,
+                    action_email text,
+                    closed_at text
                 )
                 """
             )
             self._ensure_column(conn, "runs", "document_fingerprint", "text")
             self._ensure_column(conn, "runs", "document_path", "text")
+            self._ensure_column(conn, "runs", "review_status", "text")
+            self._ensure_column(conn, "runs", "action_note", "text")
+            self._ensure_column(conn, "runs", "action_email", "text")
+            self._ensure_column(conn, "runs", "closed_at", "text")
             conn.commit()
             conn.execute(
                 """
@@ -277,4 +349,44 @@ class RunStore:
                 reasoning=row["reasoning"] or "",
                 draft_message=row["draft_message"] or "",
             )
+        run.review_status = row["review_status"] or ""
+        run.action_note = row["action_note"] or ""
+        run.action_email = row["action_email"] or ""
+        run.closed_at = row["closed_at"] or ""
         return run
+
+    def _default_status(self, run: PipelineRun) -> str:
+        if not run.decision:
+            return "flagged"
+        if run.decision.outcome.value == "auto_approve":
+            return "approved"
+        return "flagged"
+
+    def _action_email(self, run: dict, status: str, note: str) -> str:
+        document = run.get("document_name", "the submitted document")
+        if status == "approved":
+            return (
+                "To: supplier@example.com\n"
+                f"Subject: Document approved - {document}\n\n"
+                "Hello,\n\nCG has reviewed the submitted trade document and approved it for processing.\n\n"
+                "Regards,\nCG Team"
+            )
+        if status == "rejected":
+            mismatches = [item for item in run.get("validations", []) if item.get("status") != "match"]
+            lines = [
+                "To: supplier@example.com",
+                f"Subject: Document amendment required - {document}",
+                "",
+                "Hello,",
+                "",
+                "CG reviewed the submitted trade document and cannot approve it yet.",
+            ]
+            if note:
+                lines.extend(["", f"Reviewer note: {note}"])
+            if mismatches:
+                lines.extend(["", "Please correct the following fields:"])
+                for item in mismatches:
+                    lines.append(f"- {item['field_name']}: found '{item['found']}', expected '{item['expected']}'.")
+            lines.extend(["", "Please resend the corrected document for validation.", "", "Regards,", "CG Team"])
+            return "\n".join(lines)
+        return ""

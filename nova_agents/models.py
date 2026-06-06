@@ -76,6 +76,10 @@ class PipelineRun:
     extraction: ExtractionResult | None = None
     validations: list[ValidationResult] = field(default_factory=list)
     decision: Decision | None = None
+    review_status: str = ""
+    action_note: str = ""
+    action_email: str = ""
+    closed_at: str = ""
     reused_existing: bool = False
 
 

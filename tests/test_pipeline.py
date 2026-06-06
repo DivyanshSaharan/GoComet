@@ -52,6 +52,24 @@ class PipelineTest(unittest.TestCase):
             self.assertTrue(second.reused_existing)
             self.assertTrue(second.document_path)
 
+    def test_store_filters_and_updates_review_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "runs.db"
+            pipeline = TradeDocumentPipeline(db_path=db)
+            run = pipeline.run(ROOT / "samples" / "messy_invoice.txt")
+
+            store = RunStore(db)
+            self.assertEqual(run.review_status, "flagged")
+            self.assertEqual(len(store.list_runs(status="flagged")), 1)
+
+            updated = store.update_review_status(run.id, "rejected", "HS code needs correction.")
+            self.assertEqual(updated["review_status"], "rejected")
+            self.assertIn("supplier@example.com", updated["action_email"])
+            self.assertIn("HS code needs correction.", updated["action_email"])
+
+            closed = store.close_run(run.id)
+            self.assertTrue(closed["closed_at"])
+
 
 if __name__ == "__main__":
     unittest.main()

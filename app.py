@@ -59,6 +59,72 @@ def create_app() -> Flask:
     def latest_run():
         return jsonify(RunStore(DB_PATH).latest_run() or {})
 
+    @app.get("/api/runs")
+    def list_runs():
+        store = RunStore(DB_PATH)
+        runs = store.list_runs(
+            status=request.args.get("status") or None,
+            name=request.args.get("name") or None,
+            date_from=request.args.get("date_from") or None,
+            date_to=request.args.get("date_to") or None,
+        )
+        return jsonify({"runs": runs})
+
+    @app.get("/api/runs/<run_id>")
+    def get_run(run_id: str):
+        run = RunStore(DB_PATH).run_by_id(run_id)
+        if not run:
+            return jsonify({"error": "run not found"}), 404
+        return jsonify(run)
+
+    @app.post("/api/runs/<run_id>/actions")
+    def update_run_action(run_id: str):
+        payload = request.get_json(silent=True) or {}
+        action = payload.get("action")
+        note = payload.get("note", "")
+        store = RunStore(DB_PATH)
+        if action == "close":
+            run = store.close_run(run_id)
+        elif action in {"approved", "rejected", "flagged"}:
+            run = store.update_review_status(run_id, action, note)
+        else:
+            return jsonify({"error": "action must be approved, rejected, flagged, or close"}), 400
+        if not run:
+            return jsonify({"error": "run not found"}), 404
+        return jsonify(run)
+
+    @app.post("/api/batch-runs")
+    def create_batch_runs():
+        payload = request.get_json(silent=True) or {}
+        folder = payload.get("folder")
+        customer_id = payload.get("customer_id", "acme-global")
+        if not folder:
+            return jsonify({"error": "folder is required"}), 400
+        folder_path = Path(folder)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return jsonify({"error": "folder does not exist"}), 400
+
+        allowed_suffixes = {".pdf", ".png", ".jpg", ".jpeg", ".txt", ".md", ".eml"}
+        pipeline = TradeDocumentPipeline(db_path=DB_PATH)
+        runs = []
+        for document_path in sorted(folder_path.iterdir()):
+            if document_path.is_file() and document_path.suffix.lower() in allowed_suffixes:
+                runs.append(asdict(pipeline.run(document_path, customer_id=customer_id)))
+
+        approved = sum(1 for run in runs if run.get("review_status") == "approved")
+        flagged = sum(1 for run in runs if run.get("review_status") == "flagged")
+        rejected = sum(1 for run in runs if run.get("review_status") == "rejected")
+        return jsonify(
+            {
+                "folder": str(folder_path),
+                "total": len(runs),
+                "approved": approved,
+                "flagged": flagged,
+                "rejected": rejected,
+                "runs": runs,
+            }
+        )
+
     @app.get("/api/query")
     def query_runs():
         question = request.args.get("q", "")
