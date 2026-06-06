@@ -1,210 +1,140 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  AlertTriangle,
+  BarChart3,
+  Bot,
+  Boxes,
   CheckCircle2,
   Database,
   FileSearch,
-  LoaderCircle,
-  Play,
-  RefreshCw,
-  Search,
+  Route,
+  ShieldCheck,
   Upload
 } from "lucide-react";
 import "./styles.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const NAV_ITEMS = [
+  { id: "home", label: "Home", icon: Bot },
+  { id: "analyze", label: "Analyze", icon: FileSearch },
+  { id: "datastore", label: "Datastore", icon: Database }
+];
 
 function App() {
-  const [run, setRun] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [samplePath, setSamplePath] = useState("samples/clean_invoice.txt");
-  const [file, setFile] = useState(null);
-  const [question, setQuestion] = useState("how many shipments were flagged this week?");
-  const [answer, setAnswer] = useState("");
-  const [queryMeta, setQueryMeta] = useState(null);
-  const [documentText, setDocumentText] = useState("");
-  const [error, setError] = useState("");
-
-  const counts = useMemo(() => {
-    const validations = run?.validations || [];
-    return {
-      matches: validations.filter((item) => item.status === "match").length,
-      mismatches: validations.filter((item) => item.status === "mismatch").length,
-      uncertain: validations.filter((item) => item.status === "uncertain").length
-    };
-  }, [run]);
-
-  useEffect(() => {
-    loadLatest();
-  }, []);
-
-  async function loadLatest() {
-    setError("");
-    const latest = await requestJson("/api/runs/latest");
-    if (latest?.id) {
-      await setCurrentRun(latest);
-    }
-  }
-
-  async function runSample(path = samplePath) {
-    setBusy(true);
-    setError("");
-    try {
-      const result = await requestJson("/api/runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document: path })
-      });
-      await setCurrentRun(normalizeRun(result));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function uploadAndRun() {
-    if (!file) {
-      setError("Choose a PDF, image, or text document first.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      const formData = new FormData();
-      formData.append("document", file);
-      formData.append("customer_id", "acme-global");
-      const result = await requestJson("/api/runs", { method: "POST", body: formData });
-      await setCurrentRun(normalizeRun(result));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function askQuestion() {
-    setAnswer("");
-    setQueryMeta(null);
-    const result = await requestJson(`/api/query?q=${encodeURIComponent(question)}`);
-    setAnswer(result.answer);
-    setQueryMeta(result);
-  }
-
-  async function setCurrentRun(nextRun) {
-    setRun(nextRun);
-    setDocumentText("");
-    if (!nextRun?.id) {
-      return;
-    }
-    try {
-      const document = await requestJson(`/api/runs/${nextRun.id}/document`);
-      if (document.type === "text") {
-        setDocumentText(document.content);
-      }
-    } catch {
-      setDocumentText("");
-    }
-  }
+  const [page, setPage] = useState("home");
 
   return (
-    <main className="workspace">
-      {busy ? (
-        <div className="processingBanner" role="status">
-          <LoaderCircle className="spin" size={18} />
-          Running extractor, validator, and router agents
-        </div>
-      ) : null}
-
-      <section className="mast">
-        <div>
-          <p className="eyebrow">Nova / Trade Document Validation</p>
-          <h1>CG document review workspace</h1>
-        </div>
-        <button className="ghost" onClick={loadLatest} disabled={busy}>
-          <RefreshCw className={busy ? "spin" : ""} size={18} /> Refresh
-        </button>
-      </section>
-
-      <section className="runbar">
-        <div className="uploadBox">
-          <Upload size={20} />
-          <input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-          <button onClick={uploadAndRun} disabled={busy}>
-            {busy ? <LoaderCircle className="spin" size={18} /> : <FileSearch size={18} />} Validate Upload
-          </button>
-        </div>
-        <div className="sampleBox">
-          <input value={samplePath} onChange={(event) => setSamplePath(event.target.value)} />
-          <button onClick={() => runSample()} disabled={busy}>
-            {busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} />} Run Path
-          </button>
-          <button className="ghost" onClick={() => runSample("samples/messy_invoice.txt")} disabled={busy}>
-            <AlertTriangle size={18} /> Messy Sample
-          </button>
-        </div>
-      </section>
-
-      {error ? <div className="error">{error}</div> : null}
-
-      <section className="summary">
-        <Metric label="Document" value={run?.document_name || "No run yet"} tone="neutral" />
-        <Metric label="Decision" value={run?.decision_outcome || run?.decision?.outcome || "-"} tone={decisionTone(run)} />
-        <Metric label="Matched" value={counts.matches} tone="good" />
-        <Metric label="Issues" value={counts.mismatches + counts.uncertain} tone={counts.mismatches + counts.uncertain ? "bad" : "good"} />
-      </section>
-
-      <section className="pipelineSteps" aria-label="Pipeline status">
-        {["Extract", "Validate", "Route", "Store"].map((step, index) => (
-          <div className={`step ${run ? "done" : ""}`} key={step}>
-            <span>{run ? <CheckCircle2 size={15} /> : index + 1}</span>
-            {step}
+    <main className="appShell">
+      <aside className="sidebar">
+        <div className="brand">
+          <Bot size={24} />
+          <div>
+            <strong>Nova CG</strong>
+            <span>Document validation</span>
           </div>
-        ))}
-      </section>
+        </div>
+        <nav>
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button className={`navItem ${page === item.id ? "active" : ""}`} key={item.id} onClick={() => setPage(item.id)}>
+                <Icon size={18} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
 
-      <section className="contentGrid">
-        <Panel title="Source Document" icon={<FileSearch size={18} />}>
-          <DocumentEvidence run={run} documentText={documentText} />
-        </Panel>
-        <Panel title="Extracted Fields" icon={<Database size={18} />}>
-          <FieldTable rows={run?.fields || objectFields(run?.extraction?.fields)} />
-        </Panel>
-      </section>
-
-      <section className="contentGrid">
-        <Panel title="Validation Result" icon={<CheckCircle2 size={18} />}>
-          <ValidationList rows={run?.validations || []} />
-        </Panel>
-        <Panel title="Decision Reasoning" icon={<FileSearch size={18} />}>
-          <pre>{decisionText(run)}</pre>
-        </Panel>
-        <Panel title="Stored Output Query" icon={<Search size={18} />}>
-          <div className="queryRow">
-            <input value={question} onChange={(event) => setQuestion(event.target.value)} />
-            <button onClick={askQuestion}>
-              <Search size={18} /> Ask
-            </button>
-          </div>
-          <p className="answer">{answer || "Ask about flagged, approved, or mismatched shipments."}</p>
-          {queryMeta ? (
-            <div className="queryMeta">
-              <span>Route: {queryMeta.route}</span>
-              {queryMeta.sql ? <code>{queryMeta.sql}</code> : null}
-            </div>
-          ) : null}
-        </Panel>
+      <section className="page">
+        {page === "home" ? <HomePage onStart={() => setPage("analyze")} /> : null}
+        {page === "analyze" ? <AnalyzePage /> : null}
+        {page === "datastore" ? <DatastorePage /> : null}
       </section>
     </main>
   );
 }
 
-function Metric({ label, value, tone }) {
+function HomePage({ onStart }) {
   return (
-    <div className={`metric ${tone || "neutral"}`}>
-      <span>{label}</span>
-      <strong>{String(value)}</strong>
+    <>
+      <section className="hero">
+        <div>
+          <p className="eyebrow">Nova / Cargo Group workspace</p>
+          <h1>Validate trade documents with governed agent evidence.</h1>
+          <p>
+            Upload or point to invoices, run extraction and rule validation, review flagged fields, and keep every
+            decision queryable for CG operations.
+          </p>
+          <button onClick={onStart}>
+            <FileSearch size={18} /> Analyze invoice
+          </button>
+        </div>
+        <div className="heroPanel">
+          <div className="signal approved">
+            <CheckCircle2 size={18} />
+            Auto-approved documents move forward.
+          </div>
+          <div className="signal flagged">
+            <ShieldCheck size={18} />
+            Flagged documents require CG review.
+          </div>
+          <div className="signal routed">
+            <Route size={18} />
+            Rejections generate supplier-ready mail drafts.
+          </div>
+        </div>
+      </section>
+
+      <section className="summary three">
+        <Metric icon={<Upload size={20} />} label="Input" value="Path, upload, or folder" />
+        <Metric icon={<Boxes size={20} />} label="Agent Chain" value="Extract / Validate / Route / Store" />
+        <Metric icon={<BarChart3 size={20} />} label="Output" value="Status, evidence, and searchable records" />
+      </section>
+
+      <section className="contentGrid">
+        <Panel title="What This Dashboard Does" icon={<Bot size={18} />}>
+          <div className="featureList">
+            <Feature title="Analyze one invoice" text="Inspect extracted fields, validation status, evidence snippets, and CG actions." />
+            <Feature title="Analyze a folder" text="Run a batch and summarize approved versus flagged documents." />
+            <Feature title="Search datastore" text="Filter by status, name, and date, then open detailed invoice reports." />
+          </div>
+        </Panel>
+        <Panel title="Decision States" icon={<ShieldCheck size={18} />}>
+          <div className="statusLegend">
+            <span className="pill approved">Approved</span>
+            <span className="pill flagged">Flagged</span>
+            <span className="pill rejected">Rejected</span>
+          </div>
+          <p className="muted">CG can approve flagged documents, reject with a default supplier email, or close a report after review.</p>
+        </Panel>
+      </section>
+    </>
+  );
+}
+
+function AnalyzePage() {
+  return (
+    <section className="placeholder panel">
+      <h2><FileSearch size={18} />Analyze</h2>
+      <p className="muted">Single-invoice and batch analysis workflows will be added in the next commits.</p>
+    </section>
+  );
+}
+
+function DatastorePage() {
+  return (
+    <section className="placeholder panel">
+      <h2><Database size={18} />Datastore</h2>
+      <p className="muted">Searchable invoice records and action controls will be added in the final dashboard commit.</p>
+    </section>
+  );
+}
+
+function Metric({ icon, label, value }) {
+  return (
+    <div className="metric neutral">
+      <span>{icon}{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -218,124 +148,14 @@ function Panel({ title, icon, children }) {
   );
 }
 
-function FieldTable({ rows }) {
-  if (!rows?.length) {
-    return <p className="muted">No extracted fields yet.</p>;
-  }
+function Feature({ title, text }) {
   return (
-    <div className="table">
-      {rows.map((field) => (
-        <div className="fieldRow" key={field.name}>
-          <strong>{labelize(field.name)}</strong>
-          <span>{field.value || "Missing"}</span>
-          <small>{Number(field.confidence || 0).toFixed(2)}</small>
-        </div>
-      ))}
-    </div>
+    <article className="feature">
+      <strong>{title}</strong>
+      <span>{text}</span>
+    </article>
   );
-}
-
-function ValidationList({ rows }) {
-  if (!rows.length) {
-    return <p className="muted">No validation results yet.</p>;
-  }
-  return (
-    <div className="validationList">
-      {rows.map((item) => (
-        <article className={`validation ${item.status}`} key={item.field_name}>
-          <div>
-            <strong>{labelize(item.field_name)}</strong>
-            <span>{item.reason}</span>
-          </div>
-          <div className="validationMeta">
-            <span>{item.status}</span>
-            {item.status !== "match" ? <small>Found: {item.found || "-"} / Expected: {item.expected || "-"}</small> : null}
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function DocumentEvidence({ run, documentText }) {
-  const mismatches = (run?.validations || []).filter((item) => item.status !== "match");
-  if (!run) {
-    return <p className="muted">Run a document to inspect the original text and evidence snippets.</p>;
-  }
-  return (
-    <div className="evidenceStack">
-      <div className="documentPreview">
-        {documentText ? (
-          <pre>{documentText}</pre>
-        ) : (
-          <p className="muted">Preview is available for text-like documents. PDF/image uploads are stored and validated, with snippets shown below.</p>
-        )}
-      </div>
-      <div className="snippetList">
-        <strong>Why this was flagged</strong>
-        {mismatches.length ? (
-          mismatches.map((item) => (
-            <article className="snippet" key={item.field_name}>
-              <span>{labelize(item.field_name)}</span>
-              <small>{item.source_snippet || "No source snippet captured."}</small>
-            </article>
-          ))
-        ) : (
-          <p className="muted">No mismatches or uncertain fields for this run.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-async function requestJson(path, options) {
-  const response = await fetch(`${API_BASE}${path}`, options);
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error || "Request failed");
-  }
-  return payload;
-}
-
-function normalizeRun(result) {
-  if (!result.extraction) {
-    return result;
-  }
-  return {
-    ...result,
-    decision_outcome: result.decision?.outcome,
-    reasoning: result.decision?.reasoning,
-    draft_message: result.decision?.draft_message,
-    fields: objectFields(result.extraction.fields)
-  };
-}
-
-function objectFields(fields = {}) {
-  return Object.values(fields || {});
-}
-
-function decisionText(run) {
-  if (!run) {
-    return "Run a document to see the router decision.";
-  }
-  const reasoning = run.reasoning || run.decision?.reasoning || "";
-  const draft = run.draft_message || run.decision?.draft_message || "";
-  return `${reasoning}\n\n${draft}`.trim();
-}
-
-function labelize(value) {
-  return String(value || "").replaceAll("_", " ");
-}
-
-function decisionTone(run) {
-  const outcome = run?.decision_outcome || run?.decision?.outcome;
-  if (outcome === "auto_approve") {
-    return "good";
-  }
-  if (outcome === "amendment_request") {
-    return "bad";
-  }
-  return "warn";
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
