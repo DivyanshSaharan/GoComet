@@ -480,6 +480,35 @@ nav {
   gap: 12px;
 }
 
+.batchPanel {
+  margin-bottom: 16px;
+}
+
+.batchPanel .sampleBox {
+  margin-bottom: 14px;
+}
+
+.batchSummary {
+  margin: 14px 0;
+}
+
+.batchList {
+  display: grid;
+  gap: 8px;
+}
+
+.batchRow {
+  align-items: center;
+  border-top: 1px solid #edf1f4;
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 0;
+}
+
+.batchRow:first-child {
+  border-top: 0;
+}
+
 .mailDraft {
   background: #f7fafb;
   border: 1px solid #e1e8ee;

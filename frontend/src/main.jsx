@@ -118,8 +118,10 @@ function HomePage({ onStart }) {
 
 function AnalyzePage() {
   const [path, setPath] = useState("samples/clean_invoice.txt");
+  const [folder, setFolder] = useState("samples");
   const [file, setFile] = useState(null);
   const [run, setRun] = useState(null);
+  const [batch, setBatch] = useState(null);
   const [documentText, setDocumentText] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -181,6 +183,24 @@ function AnalyzePage() {
     }
   }
 
+  async function analyzeFolder() {
+    setBusy(true);
+    setError("");
+    setBatch(null);
+    try {
+      const result = await requestJson("/api/batch-runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder })
+      });
+      setBatch(result);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setCurrentRun(nextRun) {
     setRun(nextRun);
     setDocumentText("");
@@ -207,8 +227,8 @@ function AnalyzePage() {
       ) : null}
       <section className="pageHeader">
         <div>
-          <p className="eyebrow">Analyze / Single invoice</p>
-          <h1>Review one invoice with evidence.</h1>
+          <p className="eyebrow">Analyze / Single and batch</p>
+          <h1>Review one invoice or process a folder.</h1>
         </div>
       </section>
 
@@ -229,6 +249,17 @@ function AnalyzePage() {
             <Upload size={18} /> Analyze Upload
           </button>
         </div>
+      </section>
+
+      <section className="panel batchPanel">
+        <h2><Boxes size={18} />Analyze multiple invoices</h2>
+        <div className="sampleBox">
+          <input value={folder} onChange={(event) => setFolder(event.target.value)} />
+          <button onClick={analyzeFolder} disabled={busy}>
+            <Boxes size={18} /> Analyze Folder
+          </button>
+        </div>
+        <BatchSummary batch={batch} />
       </section>
 
       {error ? <div className="error">{error}</div> : null}
@@ -392,6 +423,30 @@ function ActionPanel({ run, note, setNote, onAction }) {
         <pre>{run.action_email || run.draft_message || run.decision?.draft_message || "Approve or reject to generate a supplier mail draft."}</pre>
       </div>
     </div>
+  );
+}
+
+function BatchSummary({ batch }) {
+  if (!batch) {
+    return <p className="muted">Run a folder to see batch totals for approved, flagged, and rejected invoices.</p>;
+  }
+  return (
+    <>
+      <section className="summary batchSummary">
+        <Metric icon={<Boxes size={20} />} label="Total" value={batch.total} />
+        <Metric icon={<CheckCircle2 size={20} />} label="Approved" value={batch.approved} />
+        <Metric icon={<ShieldCheck size={20} />} label="Flagged" value={batch.flagged} />
+        <Metric icon={<XCircle size={20} />} label="Rejected" value={batch.rejected} />
+      </section>
+      <div className="batchList">
+        {batch.runs.map((item) => (
+          <div className="batchRow" key={item.id}>
+            <strong>{item.document_name}</strong>
+            <span className={`pill ${item.review_status}`}>{statusLabel(item.review_status)}</span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
