@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
@@ -288,11 +288,158 @@ function AnalyzePage() {
 }
 
 function DatastorePage() {
+  const [filters, setFilters] = useState({ status: "", name: "", date_from: "", date_to: "" });
+  const [runs, setRuns] = useState([]);
+  const [openId, setOpenId] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [documentText, setDocumentText] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    loadRuns();
+  }, []);
+
+  async function loadRuns(nextFilters = filters) {
+    setBusy(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      Object.entries(nextFilters).forEach(([key, value]) => {
+        if (value) {
+          params.set(key, value);
+        }
+      });
+      const result = await requestJson(`/api/runs?${params.toString()}`);
+      setRuns(result.runs || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openRun(runId) {
+    if (openId === runId) {
+      setOpenId("");
+      setSelected(null);
+      setDocumentText("");
+      return;
+    }
+    setOpenId(runId);
+    await loadRunDetails(runId);
+  }
+
+  async function loadRunDetails(runId) {
+    setBusy(true);
+    setError("");
+    try {
+      const run = await requestJson(`/api/runs/${runId}`);
+      setSelected(run);
+      setDocumentText("");
+      const document = await requestJson(`/api/runs/${runId}/document`);
+      if (document.type === "text") {
+        setDocumentText(document.content);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function takeAction(action) {
+    if (!selected?.id) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await requestJson(`/api/runs/${selected.id}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, note })
+      });
+      setSelected(updated);
+      await loadRuns();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
   return (
-    <section className="placeholder panel">
-      <h2><Database size={18} />Datastore</h2>
-      <p className="muted">Searchable invoice records and action controls will be added in the final dashboard commit.</p>
-    </section>
+    <>
+      <section className="pageHeader">
+        <div>
+          <p className="eyebrow">Datastore / Indexed records</p>
+          <h1>Search invoice reports and reopen decisions.</h1>
+        </div>
+        <button onClick={() => loadRuns()} disabled={busy}>Refresh</button>
+      </section>
+
+      <section className="panel filterPanel">
+        <h2><Database size={18} />Search by indexes</h2>
+        <div className="filterGrid">
+          <input placeholder="Invoice name" value={filters.name} onChange={(event) => updateFilter("name", event.target.value)} />
+          <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>
+            <option value="">All statuses</option>
+            <option value="approved">Approved</option>
+            <option value="flagged">Flagged</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <input type="date" value={filters.date_from} onChange={(event) => updateFilter("date_from", event.target.value)} />
+          <input type="date" value={filters.date_to} onChange={(event) => updateFilter("date_to", event.target.value)} />
+          <button onClick={() => loadRuns()} disabled={busy}>Search</button>
+        </div>
+      </section>
+
+      {error ? <div className="error">{error}</div> : null}
+
+      <section className="contentGrid datastoreGrid">
+        <Panel title="Invoices" icon={<Database size={18} />}>
+          <div className="invoiceTable">
+            {runs.length ? runs.map((run) => (
+              <article className="invoiceRow" key={run.id}>
+                <button className="invoiceSummary" onClick={() => openRun(run.id)}>
+                  <strong>{run.document_name}</strong>
+                  <span className={`pill ${run.review_status}`}>{statusLabel(run.review_status)}</span>
+                  <time>{formatDate(run.created_at)}</time>
+                </button>
+                {openId === run.id ? (
+                  <div className="invoiceExpanded">
+                    <p>{run.reasoning || "No reasoning stored."}</p>
+                    <button onClick={() => loadRunDetails(run.id)}>
+                      <FileSearch size={18} /> Analyze Details
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            )) : <p className="muted">No invoice records match the current filters.</p>}
+          </div>
+        </Panel>
+
+        <Panel title="Invoice Detail" icon={<FileSearch size={18} />}>
+          {selected ? (
+            <div className="detailStack">
+              <RunSummary run={selected} />
+              <FieldTable rows={selected.fields} />
+              <ValidationList rows={selected.validations || []} />
+              <DocumentEvidence run={selected} documentText={documentText} />
+              <ActionPanel run={selected} note={note} setNote={setNote} onAction={takeAction} />
+            </div>
+          ) : (
+            <p className="muted">Open an invoice and click Analyze Details to inspect the stored report.</p>
+          )}
+        </Panel>
+      </section>
+    </>
   );
 }
 
@@ -485,6 +632,13 @@ function statusLabel(status) {
 
 function labelize(value) {
   return String(value || "").replaceAll("_", " ");
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+  return new Date(value).toLocaleDateString();
 }
 
 createRoot(document.getElementById("root")).render(<App />);

@@ -509,6 +509,67 @@ nav {
   border-top: 0;
 }
 
+.filterPanel {
+  margin-bottom: 16px;
+}
+
+.filterGrid {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 170px 150px 150px 110px;
+}
+
+.datastoreGrid {
+  grid-template-columns: minmax(420px, 0.8fr) minmax(0, 1.2fr);
+}
+
+.invoiceTable,
+.detailStack {
+  display: grid;
+  gap: 10px;
+}
+
+.invoiceRow {
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.invoiceSummary {
+  background: white;
+  color: #1d252d;
+  display: grid;
+  grid-template-columns: 1fr 104px 96px;
+  min-height: 48px;
+  text-align: left;
+  width: 100%;
+}
+
+.invoiceSummary:not(:disabled):hover {
+  background: #f7fafb;
+  box-shadow: none;
+  transform: none;
+}
+
+.invoiceSummary time {
+  color: #60717f;
+  font-size: 13px;
+}
+
+.invoiceExpanded {
+  background: #f7fafb;
+  border-top: 1px solid #e1e8ee;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.invoiceExpanded p {
+  color: #60717f;
+  line-height: 1.45;
+}
+
 .mailDraft {
   background: #f7fafb;
   border: 1px solid #e1e8ee;
@@ -568,6 +629,8 @@ pre {
   .appShell,
   .hero,
   .contentGrid,
+  .datastoreGrid,
+  .filterGrid,
   .runbar,
   .summary,
   .summary.three {
