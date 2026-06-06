@@ -26,14 +26,15 @@ class RunStore:
             conn.execute(
                 """
                 insert or replace into runs
-                (id, document_name, customer_id, document_fingerprint, created_at, provider, decision_outcome, reasoning, draft_message)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, document_name, customer_id, document_fingerprint, document_path, created_at, provider, decision_outcome, reasoning, draft_message)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.id,
                     run.document_name,
                     run.customer_id,
                     run.document_fingerprint,
+                    run.document_path,
                     run.created_at,
                     run.extraction.provider if run.extraction else None,
                     run.decision.outcome.value if run.decision else None,
@@ -105,32 +106,69 @@ class RunStore:
             ]
             return run
 
+    def run_by_id(self, run_id: str) -> dict | None:
+        with closing(self._connect()) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("select * from runs where id = ?", (run_id,)).fetchone()
+            if not row:
+                return None
+            run = dict(row)
+            run["fields"] = [dict(item) for item in conn.execute("select * from fields where run_id = ?", (run["id"],))]
+            run["validations"] = [
+                dict(item) for item in conn.execute("select * from validations where run_id = ?", (run["id"],))
+            ]
+            return run
+
     def answer(self, question: str) -> str:
+        return self.query(question)["answer"]
+
+    def query(self, question: str) -> dict[str, str]:
         q = question.lower()
         with closing(self._connect()) as conn:
             if "flagged" in q or "pending" in q or "review" in q:
-                count = conn.execute(
-                    """
+                sql = """
                     select count(*) from runs
                     where decision_outcome in ('human_review', 'amendment_request')
                     """
+                count = conn.execute(
+                    sql
                 ).fetchone()[0]
-                return f"{count} shipment document run(s) are pending CG attention."
+                return {
+                    "answer": f"{count} shipment document run(s) are pending CG attention.",
+                    "route": "flagged_or_pending_count",
+                    "sql": " ".join(sql.split()),
+                }
             if "approved" in q:
-                count = conn.execute("select count(*) from runs where decision_outcome = 'auto_approve'").fetchone()[0]
-                return f"{count} shipment document run(s) were auto-approved."
+                sql = "select count(*) from runs where decision_outcome = 'auto_approve'"
+                count = conn.execute(sql).fetchone()[0]
+                return {
+                    "answer": f"{count} shipment document run(s) were auto-approved.",
+                    "route": "approved_count",
+                    "sql": sql,
+                }
             if "mismatch" in q or "discrepancy" in q:
-                rows = conn.execute(
-                    """
+                sql = """
                     select field_name, found, expected from validations
                     where status = 'mismatch'
                     order by rowid desc limit 8
                     """
+                rows = conn.execute(
+                    sql
                 ).fetchall()
                 if not rows:
-                    return "No mismatches are currently stored."
-                return "; ".join(f"{name}: found {found}, expected {expected}" for name, found, expected in rows)
-        return "I can answer stored-output questions about flagged, approved, or mismatched shipment runs."
+                    answer = "No mismatches are currently stored."
+                else:
+                    answer = "; ".join(f"{name}: found {found}, expected {expected}" for name, found, expected in rows)
+                return {
+                    "answer": answer,
+                    "route": "latest_mismatches",
+                    "sql": " ".join(sql.split()),
+                }
+        return {
+            "answer": "I can answer stored-output questions about flagged, approved, or mismatched shipment runs.",
+            "route": "unsupported_question",
+            "sql": "",
+        }
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)
@@ -144,6 +182,7 @@ class RunStore:
                     document_name text not null,
                     customer_id text not null,
                     document_fingerprint text,
+                    document_path text,
                     created_at text not null,
                     provider text,
                     decision_outcome text,
@@ -153,6 +192,7 @@ class RunStore:
                 """
             )
             self._ensure_column(conn, "runs", "document_fingerprint", "text")
+            self._ensure_column(conn, "runs", "document_path", "text")
             conn.commit()
             conn.execute(
                 """
@@ -202,6 +242,7 @@ class RunStore:
             document_name=row["document_name"],
             customer_id=row["customer_id"],
             document_fingerprint=row["document_fingerprint"] or "",
+            document_path=row["document_path"] or "",
             created_at=row["created_at"],
         )
         fields = {}

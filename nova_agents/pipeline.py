@@ -33,6 +33,7 @@ class TradeDocumentPipeline:
             document_name=document.name,
             customer_id=customer_id,
             document_fingerprint=fingerprint,
+            document_path=str(document),
         )
         run.extraction = self.extractor.run(document)
         run.validations = self.validator.run(run.extraction)

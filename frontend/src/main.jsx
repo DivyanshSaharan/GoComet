@@ -22,6 +22,8 @@ function App() {
   const [file, setFile] = useState(null);
   const [question, setQuestion] = useState("how many shipments were flagged this week?");
   const [answer, setAnswer] = useState("");
+  const [queryMeta, setQueryMeta] = useState(null);
+  const [documentText, setDocumentText] = useState("");
   const [error, setError] = useState("");
 
   const counts = useMemo(() => {
@@ -41,7 +43,7 @@ function App() {
     setError("");
     const latest = await requestJson("/api/runs/latest");
     if (latest?.id) {
-      setRun(latest);
+      await setCurrentRun(latest);
     }
   }
 
@@ -54,7 +56,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ document: path })
       });
-      setRun(normalizeRun(result));
+      await setCurrentRun(normalizeRun(result));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -74,7 +76,7 @@ function App() {
       formData.append("document", file);
       formData.append("customer_id", "acme-global");
       const result = await requestJson("/api/runs", { method: "POST", body: formData });
-      setRun(normalizeRun(result));
+      await setCurrentRun(normalizeRun(result));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -84,8 +86,26 @@ function App() {
 
   async function askQuestion() {
     setAnswer("");
+    setQueryMeta(null);
     const result = await requestJson(`/api/query?q=${encodeURIComponent(question)}`);
     setAnswer(result.answer);
+    setQueryMeta(result);
+  }
+
+  async function setCurrentRun(nextRun) {
+    setRun(nextRun);
+    setDocumentText("");
+    if (!nextRun?.id) {
+      return;
+    }
+    try {
+      const document = await requestJson(`/api/runs/${nextRun.id}/document`);
+      if (document.type === "text") {
+        setDocumentText(document.content);
+      }
+    } catch {
+      setDocumentText("");
+    }
   }
 
   return (
@@ -145,15 +165,18 @@ function App() {
       </section>
 
       <section className="contentGrid">
+        <Panel title="Source Document" icon={<FileSearch size={18} />}>
+          <DocumentEvidence run={run} documentText={documentText} />
+        </Panel>
         <Panel title="Extracted Fields" icon={<Database size={18} />}>
           <FieldTable rows={run?.fields || objectFields(run?.extraction?.fields)} />
-        </Panel>
-        <Panel title="Validation Result" icon={<CheckCircle2 size={18} />}>
-          <ValidationList rows={run?.validations || []} />
         </Panel>
       </section>
 
       <section className="contentGrid">
+        <Panel title="Validation Result" icon={<CheckCircle2 size={18} />}>
+          <ValidationList rows={run?.validations || []} />
+        </Panel>
         <Panel title="Decision Reasoning" icon={<FileSearch size={18} />}>
           <pre>{decisionText(run)}</pre>
         </Panel>
@@ -165,6 +188,12 @@ function App() {
             </button>
           </div>
           <p className="answer">{answer || "Ask about flagged, approved, or mismatched shipments."}</p>
+          {queryMeta ? (
+            <div className="queryMeta">
+              <span>Route: {queryMeta.route}</span>
+              {queryMeta.sql ? <code>{queryMeta.sql}</code> : null}
+            </div>
+          ) : null}
         </Panel>
       </section>
     </main>
@@ -228,6 +257,37 @@ function ValidationList({ rows }) {
   );
 }
 
+function DocumentEvidence({ run, documentText }) {
+  const mismatches = (run?.validations || []).filter((item) => item.status !== "match");
+  if (!run) {
+    return <p className="muted">Run a document to inspect the original text and evidence snippets.</p>;
+  }
+  return (
+    <div className="evidenceStack">
+      <div className="documentPreview">
+        {documentText ? (
+          <pre>{documentText}</pre>
+        ) : (
+          <p className="muted">Preview is available for text-like documents. PDF/image uploads are stored and validated, with snippets shown below.</p>
+        )}
+      </div>
+      <div className="snippetList">
+        <strong>Why this was flagged</strong>
+        {mismatches.length ? (
+          mismatches.map((item) => (
+            <article className="snippet" key={item.field_name}>
+              <span>{labelize(item.field_name)}</span>
+              <small>{item.source_snippet || "No source snippet captured."}</small>
+            </article>
+          ))
+        ) : (
+          <p className="muted">No mismatches or uncertain fields for this run.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 async function requestJson(path, options) {
   const response = await fetch(`${API_BASE}${path}`, options);
   const payload = await response.json();
@@ -279,4 +339,3 @@ function decisionTone(run) {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
-

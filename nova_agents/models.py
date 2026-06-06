@@ -71,6 +71,7 @@ class PipelineRun:
     document_name: str
     customer_id: str
     document_fingerprint: str = ""
+    document_path: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     extraction: ExtractionResult | None = None
     validations: list[ValidationResult] = field(default_factory=list)

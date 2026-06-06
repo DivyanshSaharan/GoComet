@@ -37,6 +37,9 @@ class PipelineTest(unittest.TestCase):
             store = RunStore(db)
             self.assertIn("1 shipment", store.answer("how many shipments were flagged this week?"))
             self.assertIn("1 shipment", store.answer("how many were approved?"))
+            query = store.query("show mismatches")
+            self.assertEqual(query["route"], "latest_mismatches")
+            self.assertIn("select field_name", query["sql"])
 
     def test_same_customer_document_is_deduplicated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -47,6 +50,7 @@ class PipelineTest(unittest.TestCase):
 
             self.assertEqual(first.id, second.id)
             self.assertTrue(second.reused_existing)
+            self.assertTrue(second.document_path)
 
 
 if __name__ == "__main__":

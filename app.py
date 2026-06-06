@@ -3,7 +3,7 @@ from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 
 from nova_agents.pipeline import TradeDocumentPipeline
@@ -62,7 +62,30 @@ def create_app() -> Flask:
     @app.get("/api/query")
     def query_runs():
         question = request.args.get("q", "")
-        return jsonify({"answer": RunStore(DB_PATH).answer(question)})
+        return jsonify(RunStore(DB_PATH).query(question))
+
+    @app.get("/api/runs/<run_id>/document")
+    def run_document(run_id: str):
+        run = RunStore(DB_PATH).run_by_id(run_id)
+        if not run or not run.get("document_path"):
+            return jsonify({"error": "document not found"}), 404
+
+        document_path = Path(run["document_path"]).resolve()
+        allowed_roots = [ROOT.resolve(), UPLOAD_DIR.resolve()]
+        if not any(document_path == root or root in document_path.parents for root in allowed_roots):
+            return jsonify({"error": "document path is outside the workspace"}), 403
+        if not document_path.exists():
+            return jsonify({"error": "document file is missing"}), 404
+
+        if document_path.suffix.lower() in {".txt", ".md", ".eml"}:
+            return jsonify(
+                {
+                    "name": document_path.name,
+                    "type": "text",
+                    "content": document_path.read_text(encoding="utf-8", errors="replace"),
+                }
+            )
+        return send_file(document_path)
 
     @app.route("/", defaults={"path": "index.html"})
     @app.route("/<path:path>")
