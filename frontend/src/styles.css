@@ -520,6 +520,42 @@ nav {
   grid-template-columns: 1fr 170px 150px 150px 110px;
 }
 
+.askDatastore {
+  align-items: end;
+  background: #f7fafb;
+  border: 1px solid #dce5eb;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.askDatastore label {
+  color: #60717f;
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.queryAnswer {
+  background: #edf6f4;
+  border: 1px solid #c5ddd7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.queryAnswer code {
+  color: #60717f;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .datastoreGrid {
   grid-template-columns: minmax(420px, 0.8fr) minmax(0, 1.2fr);
 }
@@ -737,6 +773,7 @@ pre {
   .contentGrid,
   .datastoreGrid,
   .filterGrid,
+  .askDatastore,
   .resultOnly,
   .reviewCta,
   .runbar,

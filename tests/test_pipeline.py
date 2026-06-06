@@ -39,7 +39,19 @@ class PipelineTest(unittest.TestCase):
             self.assertIn("1 shipment", store.answer("how many were approved?"))
             query = store.query("show mismatches")
             self.assertEqual(query["route"], "latest_mismatches")
-            self.assertIn("select field_name", query["sql"])
+            self.assertIn("validations.field_name", query["sql"])
+
+    def test_query_layer_uses_review_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "runs.db"
+            pipeline = TradeDocumentPipeline(db_path=db)
+            run = pipeline.run(ROOT / "samples" / "messy_invoice.txt")
+
+            store = RunStore(db)
+            store.update_review_status(run.id, "rejected", "Already processed.")
+
+            self.assertIn("0 shipment", store.answer("how many shipments are flagged?"))
+            self.assertIn("rejected status", store.answer("how many rejected shipments?"))
 
     def test_same_customer_document_is_deduplicated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

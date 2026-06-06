@@ -29,6 +29,11 @@ export async function getRun(runId) {
   return requestJson(`/api/runs/${runId}`);
 }
 
+export async function askDatastore(question) {
+  const params = new URLSearchParams({ q: question });
+  return requestJson(`/api/query?${params.toString()}`);
+}
+
 export async function getRunDocument(runId) {
   return requestJson(`/api/runs/${runId}/document`);
 }

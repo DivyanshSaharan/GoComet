@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, Database, FileSearch, XCircle } from "lucide-react";
-import { getRun, getRunDocument, listRuns, updateRunAction } from "../api.js";
+import { CheckCircle2, Database, Send, XCircle } from "lucide-react";
+import { askDatastore, getRun, getRunDocument, listRuns, updateRunAction } from "../api.js";
 import { DocumentEvidence, FieldTable, formatDate, statusLabel, ValidationList } from "../components/Shared.jsx";
 
 export function DatastorePage() {
@@ -10,6 +10,8 @@ export function DatastorePage() {
   const [details, setDetails] = useState({});
   const [documentTextById, setDocumentTextById] = useState({});
   const [notes, setNotes] = useState({});
+  const [question, setQuestion] = useState("how many shipments were flagged this week?");
+  const [queryResult, setQueryResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -73,6 +75,22 @@ export function DatastorePage() {
     }
   }
 
+  async function askQuestion(event) {
+    event.preventDefault();
+    if (!question.trim()) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      setQueryResult(await askDatastore(question.trim()));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }));
   }
@@ -88,6 +106,27 @@ export function DatastorePage() {
 
       <section className="panel searchInvoices">
         <h2><Database size={18} />Search invoices</h2>
+        <form className="askDatastore" onSubmit={askQuestion}>
+          <div>
+            <label htmlFor="datastoreQuestion">Ask datastore</label>
+            <input
+              id="datastoreQuestion"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              placeholder="How many shipments were flagged this week?"
+            />
+          </div>
+          <button type="submit" disabled={busy}>
+            <Send size={17} /> Ask
+          </button>
+        </form>
+        {queryResult ? (
+          <div className="queryAnswer">
+            <strong>{queryResult.answer}</strong>
+            {queryResult.sql ? <code>{queryResult.sql}</code> : null}
+          </div>
+        ) : null}
+
         <div className="filterGrid">
           <input placeholder="Invoice name" value={filters.name} onChange={(event) => updateFilter("name", event.target.value)} />
           <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>

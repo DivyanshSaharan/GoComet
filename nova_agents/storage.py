@@ -1,7 +1,8 @@
 import json
+import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .models import (
@@ -186,35 +187,38 @@ class RunStore:
     def answer(self, question: str) -> str:
         return self.query(question)["answer"]
 
-    def query(self, question: str) -> dict[str, str]:
-        q = question.lower()
+    def query(self, question: str) -> dict:
+        intent = self._query_intent(question)
         with closing(self._connect()) as conn:
-            if "flagged" in q or "pending" in q or "review" in q:
-                sql = """
-                    select count(*) from runs
-                    where decision_outcome in ('human_review', 'amendment_request')
-                    """
-                count = conn.execute(
-                    sql
-                ).fetchone()[0]
+            if intent["metric"] == "status_count" and intent.get("status"):
+                where, params = self._query_where(intent)
+                sql = f"select count(*) from runs {where}"
+                count = conn.execute(sql, params).fetchone()[0]
                 return {
-                    "answer": f"{count} shipment document run(s) are pending CG attention.",
-                    "route": "flagged_or_pending_count",
+                    "answer": self._count_answer(count, intent),
+                    "route": "status_count",
                     "sql": " ".join(sql.split()),
+                    "params": params,
+                    "intent": intent,
                 }
-            if "approved" in q:
-                sql = "select count(*) from runs where decision_outcome = 'auto_approve'"
-                count = conn.execute(sql).fetchone()[0]
+            if intent["metric"] == "shipment_count":
+                where, params = self._query_where(intent)
+                sql = f"select count(*) from runs {where}"
+                count = conn.execute(sql, params).fetchone()[0]
                 return {
-                    "answer": f"{count} shipment document run(s) were auto-approved.",
-                    "route": "approved_count",
-                    "sql": sql,
+                    "answer": self._count_answer(count, intent),
+                    "route": "shipment_count",
+                    "sql": " ".join(sql.split()),
+                    "params": params,
+                    "intent": intent,
                 }
-            if "mismatch" in q or "discrepancy" in q:
+            if intent["metric"] == "latest_mismatches":
                 sql = """
-                    select field_name, found, expected from validations
+                    select runs.document_name, validations.field_name, validations.found, validations.expected
+                    from validations
+                    join runs on runs.id = validations.run_id
                     where status = 'mismatch'
-                    order by rowid desc limit 8
+                    order by validations.rowid desc limit 8
                     """
                 rows = conn.execute(
                     sql
@@ -222,17 +226,118 @@ class RunStore:
                 if not rows:
                     answer = "No mismatches are currently stored."
                 else:
-                    answer = "; ".join(f"{name}: found {found}, expected {expected}" for name, found, expected in rows)
+                    answer = "; ".join(
+                        f"{document} - {name}: found {found}, expected {expected}"
+                        for document, name, found, expected in rows
+                    )
                 return {
                     "answer": answer,
                     "route": "latest_mismatches",
                     "sql": " ".join(sql.split()),
+                    "params": [],
+                    "intent": intent,
                 }
         return {
-            "answer": "I can answer stored-output questions about flagged, approved, or mismatched shipment runs.",
+            "answer": "I can answer stored-output questions about shipment counts, statuses, dates, names, and mismatches.",
             "route": "unsupported_question",
             "sql": "",
+            "params": [],
+            "intent": intent,
         }
+
+    def _query_intent(self, question: str) -> dict:
+        llm_intent = self._query_intent_with_gemini(question)
+        if llm_intent:
+            return llm_intent
+
+        q = question.lower()
+        status = ""
+        if "flagged" in q or "pending" in q or "review" in q:
+            status = "flagged"
+        elif "approved" in q or "approve" in q:
+            status = "approved"
+        elif "rejected" in q or "reject" in q:
+            status = "rejected"
+
+        metric = "status_count" if status else "shipment_count"
+        if "mismatch" in q or "discrepancy" in q or "problem" in q:
+            metric = "latest_mismatches"
+
+        period = "all"
+        if "today" in q:
+            period = "today"
+        elif "week" in q:
+            period = "this_week"
+
+        return {"metric": metric, "status": status, "period": period, "name": ""}
+
+    def _query_intent_with_gemini(self, question: str) -> dict | None:
+        if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+            return None
+        try:
+            from google import genai
+            from google.genai import types
+
+            prompt = (
+                "Map this datastore question to JSON only. Allowed metrics: status_count, shipment_count, "
+                "latest_mismatches, unsupported. Allowed status: approved, flagged, rejected, or empty. "
+                "Allowed period: today, this_week, all. Include optional name as plain text if the question "
+                f"filters by invoice/document name. Question: {question}"
+            )
+            response = genai.Client().models.generate_content(
+                model=os.getenv("NOVA_QUERY_MODEL", "gemini-2.5-flash"),
+                contents=[prompt],
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            payload = json.loads(response.text or "{}")
+        except Exception:
+            return None
+
+        metric = payload.get("metric") if payload.get("metric") in {
+            "status_count",
+            "shipment_count",
+            "latest_mismatches",
+            "unsupported",
+        } else "unsupported"
+        status = payload.get("status") if payload.get("status") in {"approved", "flagged", "rejected"} else ""
+        period = payload.get("period") if payload.get("period") in {"today", "this_week", "all"} else "all"
+        name = str(payload.get("name") or "")[:80]
+        return {"metric": metric, "status": status, "period": period, "name": name}
+
+    def _query_where(self, intent: dict) -> tuple[str, list[str]]:
+        clauses = []
+        params = []
+        if intent.get("status"):
+            clauses.append("review_status = ?")
+            params.append(intent["status"])
+        if intent.get("name"):
+            clauses.append("lower(document_name) like ?")
+            params.append(f"%{intent['name'].lower()}%")
+        start_date = self._period_start(intent.get("period", "all"))
+        if start_date:
+            clauses.append("date(created_at) >= date(?)")
+            params.append(start_date)
+        return (f"where {' and '.join(clauses)}" if clauses else "", params)
+
+    def _period_start(self, period: str) -> str:
+        now = datetime.now(timezone.utc)
+        if period == "today":
+            return now.date().isoformat()
+        if period == "this_week":
+            start = now - timedelta(days=now.weekday())
+            return start.date().isoformat()
+        return ""
+
+    def _count_answer(self, count: int, intent: dict) -> str:
+        status = intent.get("status")
+        period = intent.get("period", "all")
+        window = ""
+        if period == "today":
+            window = " today"
+        elif period == "this_week":
+            window = " this week"
+        status_text = f" with {status} status" if status else ""
+        return f"{count} shipment document run(s) found{status_text}{window}."
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)

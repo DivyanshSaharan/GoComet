@@ -83,7 +83,10 @@ Ask from the UI:
 how many shipments were flagged this week?
 show mismatches
 how many were approved?
+how many rejected shipments?
 ```
+
+The query endpoint maps each question to a small allowed query intent, then runs a grounded SQLite query and shows the SQL basis in the UI. If a Gemini key is configured, Gemini can help map phrasing to the intent; the app still executes only the supported query shapes.
 
 ## Vision LLM Extraction
 
