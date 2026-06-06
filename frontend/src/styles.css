@@ -609,6 +609,11 @@ nav {
   padding: 12px;
 }
 
+.deletePanel {
+  display: flex;
+  justify-content: flex-end;
+}
+
 pre {
   color: #33414e;
   font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;

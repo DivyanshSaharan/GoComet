@@ -29,6 +29,10 @@ export async function getRun(runId) {
   return requestJson(`/api/runs/${runId}`);
 }
 
+export async function deleteRun(runId) {
+  return requestJson(`/api/runs/${runId}`, { method: "DELETE" });
+}
+
 export async function askDatastore(question) {
   const params = new URLSearchParams({ q: question });
   return requestJson(`/api/query?${params.toString()}`);

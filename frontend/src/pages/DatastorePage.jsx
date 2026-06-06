@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, Database, LoaderCircle, Send, XCircle } from "lucide-react";
-import { askDatastore, getRun, getRunDocument, listRuns, updateRunAction } from "../api.js";
+import { CheckCircle2, Database, LoaderCircle, Send, Trash2, XCircle } from "lucide-react";
+import { askDatastore, deleteRun, getRun, getRunDocument, listRuns, updateRunAction } from "../api.js";
 import { DocumentEvidence, FieldTable, formatDate, statusLabel, ValidationList } from "../components/Shared.jsx";
 
 export function DatastorePage() {
@@ -69,6 +69,34 @@ export function DatastorePage() {
       const updated = await updateRunAction(runId, action, notes[runId] || "");
       setDetails((current) => ({ ...current, [runId]: updated }));
       setRuns((current) => current.map((run) => run.id === runId ? { ...run, review_status: updated.review_status, action_email: updated.action_email } : run));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeRun(runId) {
+    const confirmed = window.confirm("Delete this invoice from the datastore?");
+    if (!confirmed) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await deleteRun(runId);
+      setRuns((current) => current.filter((run) => run.id !== runId));
+      setDetails((current) => {
+        const next = { ...current };
+        delete next[runId];
+        return next;
+      });
+      setDocumentTextById((current) => {
+        const next = { ...current };
+        delete next[runId];
+        return next;
+      });
+      setOpenId("");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -161,6 +189,11 @@ export function DatastorePage() {
                         <FieldTable rows={detail.fields || []} />
                         <ValidationList rows={detail.validations || []} />
                         <DocumentEvidence run={detail} documentText={documentTextById[run.id]} />
+                        <div className="deletePanel">
+                          <button className="danger" onClick={() => removeRun(run.id)} disabled={busy}>
+                            <Trash2 size={18} /> Delete invoice
+                          </button>
+                        </div>
                         {isFlagged ? (
                           <div className="actionPanel">
                             <textarea

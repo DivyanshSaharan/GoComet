@@ -140,6 +140,14 @@ class RunStore:
             conn.commit()
         return self.run_by_id(run_id)
 
+    def delete_run(self, run_id: str) -> bool:
+        with closing(self._connect()) as conn:
+            cursor = conn.execute("delete from validations where run_id = ?", (run_id,))
+            conn.execute("delete from fields where run_id = ?", (run_id,))
+            run_cursor = conn.execute("delete from runs where id = ?", (run_id,))
+            conn.commit()
+        return bool(cursor.rowcount or run_cursor.rowcount)
+
     def find_by_fingerprint(self, customer_id: str, document_fingerprint: str) -> PipelineRun | None:
         if not document_fingerprint:
             return None

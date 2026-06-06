@@ -23,7 +23,7 @@ def create_app() -> Flask:
     def add_cors_headers(response):
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,DELETE,OPTIONS"
         return response
 
     @app.get("/api/health")
@@ -76,6 +76,13 @@ def create_app() -> Flask:
         if not run:
             return jsonify({"error": "run not found"}), 404
         return jsonify(run)
+
+    @app.delete("/api/runs/<run_id>")
+    def delete_run(run_id: str):
+        deleted = RunStore(DB_PATH).delete_run(run_id)
+        if not deleted:
+            return jsonify({"error": "run not found"}), 404
+        return jsonify({"deleted": True, "id": run_id})
 
     @app.post("/api/runs/<run_id>/actions")
     def update_run_action(run_id: str):

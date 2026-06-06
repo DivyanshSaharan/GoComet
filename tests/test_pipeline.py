@@ -82,6 +82,18 @@ class PipelineTest(unittest.TestCase):
             closed = store.close_run(run.id)
             self.assertTrue(closed["closed_at"])
 
+    def test_store_deletes_run_and_children(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "runs.db"
+            pipeline = TradeDocumentPipeline(db_path=db)
+            run = pipeline.run(ROOT / "samples" / "messy_invoice.txt")
+
+            store = RunStore(db)
+            self.assertTrue(store.delete_run(run.id))
+            self.assertIsNone(store.run_by_id(run.id))
+            self.assertEqual(store.list_runs(), [])
+            self.assertFalse(store.delete_run(run.id))
+
 
 if __name__ == "__main__":
     unittest.main()
