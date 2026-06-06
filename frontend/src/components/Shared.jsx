@@ -57,12 +57,23 @@ export function ValidationList({ rows }) {
   );
 }
 
-export function DocumentEvidence({ run, documentText }) {
+export function DocumentEvidence({ run, documentText, documentUrl }) {
   const issues = (run?.validations || []).filter((item) => item.status !== "match");
+  const documentName = run?.document_path || run?.document_name || "";
+  const lowerName = documentName.toLowerCase();
+  const isImage = [".png", ".jpg", ".jpeg", ".webp", ".gif"].some((suffix) => lowerName.endsWith(suffix));
+  const isPdf = lowerName.endsWith(".pdf");
   return (
     <div className="evidenceStack">
       <div className="documentPreview">
-        {documentText ? <pre>{documentText}</pre> : <p className="muted">Text preview is available for text-like documents. Snippets are shown below.</p>}
+        <div className="previewHeader">
+          <strong>Source document</strong>
+          {documentUrl ? <a href={documentUrl} target="_blank" rel="noreferrer">Open full document</a> : null}
+        </div>
+        {documentText ? <pre>{documentText}</pre> : null}
+        {!documentText && isImage ? <img src={documentUrl} alt={run.document_name || "Source document"} /> : null}
+        {!documentText && isPdf ? <iframe title={run.document_name || "Source document"} src={documentUrl} /> : null}
+        {!documentText && !isImage && !isPdf ? <p className="muted">Preview is unavailable for this file type. Use the full document link above.</p> : null}
       </div>
       <div className="snippetList">
         <strong>Problem Evidence</strong>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { CheckCircle2, Database, LoaderCircle, Send, Trash2, XCircle } from "lucide-react";
-import { askDatastore, deleteRun, getRun, getRunDocument, listRuns, updateRunAction } from "../api.js";
+import { askDatastore, deleteRun, getRun, getRunDocument, getRunDocumentUrl, listRuns, updateRunAction } from "../api.js";
 import { DocumentEvidence, FieldTable, formatDate, statusLabel, ValidationList } from "../components/Shared.jsx";
 
 export function DatastorePage() {
@@ -194,7 +194,7 @@ export function DatastorePage() {
                         </div>
                         <FieldTable rows={detail.fields || []} />
                         <ValidationList rows={detail.validations || []} />
-                        <DocumentEvidence run={detail} documentText={documentTextById[run.id]} />
+                        <DocumentEvidence run={detail} documentText={documentTextById[run.id]} documentUrl={getRunDocumentUrl(run.id)} />
                         {isFlagged ? (
                           <div className="actionPanel">
                             <textarea

@@ -447,9 +447,42 @@ nav {
   background: #f7fafb;
   border: 1px solid #e1e8ee;
   border-radius: 6px;
-  max-height: 260px;
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
   overflow: auto;
   padding: 12px;
+}
+
+.previewHeader {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.previewHeader a {
+  color: #145c52;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.documentPreview img {
+  background: white;
+  border: 1px solid #e1e8ee;
+  border-radius: 6px;
+  max-height: 340px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.documentPreview iframe {
+  background: white;
+  border: 1px solid #e1e8ee;
+  border-radius: 6px;
+  height: 340px;
+  width: 100%;
 }
 
 .snippetList > strong {

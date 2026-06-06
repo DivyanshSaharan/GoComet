@@ -42,6 +42,10 @@ export async function getRunDocument(runId) {
   return requestJson(`/api/runs/${runId}/document`);
 }
 
+export function getRunDocumentUrl(runId) {
+  return `${API_BASE}/api/runs/${runId}/document`;
+}
+
 export async function updateRunAction(runId, action, note = "") {
   return requestJson(`/api/runs/${runId}/actions`, {
     method: "POST",
