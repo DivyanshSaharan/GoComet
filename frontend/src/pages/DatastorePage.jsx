@@ -186,14 +186,14 @@ export function DatastorePage() {
                     <p>{run.reasoning || "No reasoning stored."}</p>
                     {detail ? (
                       <div className="inlineDetails">
-                        <FieldTable rows={detail.fields || []} />
-                        <ValidationList rows={detail.validations || []} />
-                        <DocumentEvidence run={detail} documentText={documentTextById[run.id]} />
                         <div className="deletePanel">
                           <button className="danger" onClick={() => removeRun(run.id)} disabled={busy}>
                             <Trash2 size={18} /> Delete invoice
                           </button>
                         </div>
+                        <FieldTable rows={detail.fields || []} />
+                        <ValidationList rows={detail.validations || []} />
+                        <DocumentEvidence run={detail} documentText={documentTextById[run.id]} />
                         {isFlagged ? (
                           <div className="actionPanel">
                             <textarea
