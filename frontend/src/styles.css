@@ -550,12 +550,6 @@ nav {
   padding: 12px;
 }
 
-.queryAnswer code {
-  color: #60717f;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
 .datastoreGrid {
   grid-template-columns: minmax(420px, 0.8fr) minmax(0, 1.2fr);
 }

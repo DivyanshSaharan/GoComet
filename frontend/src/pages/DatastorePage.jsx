@@ -124,7 +124,6 @@ export function DatastorePage() {
         {queryResult ? (
           <div className="queryAnswer">
             <strong>{queryResult.answer}</strong>
-            {queryResult.sql ? <code>{queryResult.sql}</code> : null}
           </div>
         ) : null}
 
