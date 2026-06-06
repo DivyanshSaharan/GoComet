@@ -1,0 +1,48 @@
+{
+  "customer_id": "acme-global",
+  "customer_name": "ACME Global Retail",
+  "rules": {
+    "consignee_name": {
+      "type": "exact",
+      "expected": "ACME Global Retail Pvt Ltd",
+      "required": true
+    },
+    "hs_code": {
+      "type": "one_of",
+      "expected": ["850440", "85044090"],
+      "required": true
+    },
+    "port_of_loading": {
+      "type": "one_of",
+      "expected": ["Shanghai", "Shanghai Port", "CNSHA"],
+      "required": true
+    },
+    "port_of_discharge": {
+      "type": "one_of",
+      "expected": ["Nhava Sheva", "Jawaharlal Nehru Port", "INNSA"],
+      "required": true
+    },
+    "incoterms": {
+      "type": "one_of",
+      "expected": ["FOB", "CIF"],
+      "required": true
+    },
+    "description_of_goods": {
+      "type": "contains",
+      "expected": "power adapters",
+      "required": true
+    },
+    "gross_weight": {
+      "type": "max_number",
+      "expected": 12000,
+      "unit": "kg",
+      "required": true
+    },
+    "invoice_number": {
+      "type": "pattern",
+      "expected": "^INV-[0-9]{4,}$",
+      "required": true
+    }
+  }
+}
+
