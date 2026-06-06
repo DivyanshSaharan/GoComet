@@ -8,6 +8,13 @@ from pathlib import Path
 
 from .models import ExtractionResult, ExtractedField, REQUIRED_FIELDS
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 
 FIELD_PATTERNS = {
     "consignee_name": r"Consignee(?: Name)?:\s*(.+)",

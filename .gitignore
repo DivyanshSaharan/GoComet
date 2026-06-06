@@ -6,3 +6,4 @@ data/*.db-*
 data/uploads/
 frontend/dist/
 frontend/node_modules/
+.env
