@@ -216,6 +216,9 @@ export function DatastorePage() {
                             </div>
                           </div>
                         ) : null}
+                        <div className="collapsePanel">
+                          <button className="ghost" onClick={() => setOpenId("")}>Collapse report</button>
+                        </div>
                       </div>
                     ) : (
                       <p className="muted">Loading invoice details...</p>

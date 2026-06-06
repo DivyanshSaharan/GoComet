@@ -647,6 +647,11 @@ nav {
   justify-content: flex-end;
 }
 
+.collapsePanel {
+  display: flex;
+  justify-content: center;
+}
+
 .modalBackdrop {
   align-items: center;
   background: rgba(23, 36, 45, 0.42);
