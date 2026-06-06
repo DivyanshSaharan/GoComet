@@ -1,0 +1,14 @@
+Commercial Invoice
+
+Invoice Number: INV-24031
+Consignee Name: ACME Global Retail Pvt Ltd
+HS Code: 850440
+Port of Loading: Shanghai
+Port of Discharge: Nhava Sheva
+Incoterms: FOB
+Description of Goods: Power adapters for consumer electronics
+Gross Weight: 8450 kg
+
+Supplier: Brightline Components Ltd
+Vessel: Green Ocean 042
+

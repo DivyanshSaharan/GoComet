@@ -1,0 +1,13 @@
+Commercial Invoice
+
+Invoice No: INV-77A
+Consignee: ACME Global Retail Private Limited
+HS Code: 850450
+Port of Loading: Shenzhen
+Port of Discharge: Nhava Sheva
+Incoterms: EXW
+Description of Goods: Mixed electronic accessories and chargers
+Gross Weight: 12480 kg
+
+The document scan is partially smudged near the invoice number and consignee block.
+
