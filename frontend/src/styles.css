@@ -41,6 +41,26 @@ button:not(:disabled):hover {
   transform: translateY(-1px);
 }
 
+button.ghost {
+  background: white;
+  border: 1px solid #cdd6df;
+  color: #1d252d;
+}
+
+button.ghost:not(:disabled):hover {
+  background: #f9fbfc;
+  border-color: #aebbc6;
+  box-shadow: 0 8px 18px rgba(44, 56, 68, 0.1);
+}
+
+button.danger {
+  background: #a33d1c;
+}
+
+button.danger:not(:disabled):hover {
+  background: #843116;
+}
+
 button:disabled {
   cursor: wait;
   opacity: 0.62;
@@ -129,6 +149,17 @@ nav {
 
 .page {
   padding: 26px;
+}
+
+.pageHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.pageHeader h1 {
+  font-size: 30px;
 }
 
 .hero {
@@ -269,9 +300,200 @@ nav {
   margin-bottom: 16px;
 }
 
+.runbar {
+  background: white;
+  border: 1px solid #d8e0e7;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.uploadBox,
+.sampleBox,
+.queryRow,
+.actionRow {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.error {
+  background: #fff2ed;
+  border: 1px solid #f0b49d;
+  border-radius: 6px;
+  color: #8c3416;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+}
+
+.processingBanner {
+  align-items: center;
+  background: #20313d;
+  border-radius: 8px;
+  color: white;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 11px 14px;
+}
+
+.spin {
+  animation: spin 850ms linear infinite;
+}
+
 .panel {
   min-height: 220px;
   padding: 18px;
+}
+
+.fieldRow {
+  align-items: center;
+  border-top: 1px solid #edf1f4;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 150px 1fr 58px;
+  padding: 10px 0;
+  transition: background 160ms ease, padding-left 160ms ease;
+}
+
+.fieldRow:first-child {
+  border-top: 0;
+}
+
+.fieldRow:hover {
+  background: #f7fafb;
+  padding-left: 8px;
+}
+
+.fieldRow strong,
+.validation strong,
+.snippet span {
+  text-transform: capitalize;
+}
+
+.fieldRow span,
+.validation span {
+  color: #60717f;
+}
+
+.fieldRow small {
+  background: #ecf6f4;
+  border-radius: 999px;
+  color: #145c52;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+.validation {
+  border-left: 4px solid #b9c4cc;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 180px;
+  padding: 10px 0 10px 12px;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.validation:hover {
+  background: #f7fafb;
+  transform: translateX(2px);
+}
+
+.validation.match {
+  border-left-color: #2d805f;
+}
+
+.validation.mismatch {
+  border-left-color: #b44d25;
+}
+
+.validation.uncertain {
+  border-left-color: #876300;
+}
+
+.validationMeta {
+  text-align: right;
+}
+
+.validationMeta > span {
+  border-radius: 999px;
+  color: white;
+  display: inline-block;
+  font-size: 12px;
+  padding: 4px 9px;
+}
+
+.match .validationMeta > span {
+  background: #2d805f;
+}
+
+.mismatch .validationMeta > span {
+  background: #b44d25;
+}
+
+.uncertain .validationMeta > span {
+  background: #876300;
+}
+
+.validationMeta small {
+  color: #60717f;
+  display: block;
+  margin-top: 7px;
+}
+
+.documentPreview {
+  background: #f7fafb;
+  border: 1px solid #e1e8ee;
+  border-radius: 6px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.snippetList > strong {
+  color: #33414e;
+}
+
+.snippet {
+  background: #fff8f5;
+  border-left: 4px solid #b44d25;
+  border-radius: 6px;
+  padding: 9px 10px;
+}
+
+.snippet span {
+  color: #8c3416;
+  display: block;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.snippet small {
+  color: #5e6a75;
+  line-height: 1.45;
+}
+
+.actionPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.mailDraft {
+  background: #f7fafb;
+  border: 1px solid #e1e8ee;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+pre {
+  color: #33414e;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 .panel h2 {
@@ -317,9 +539,18 @@ nav {
   .appShell,
   .hero,
   .contentGrid,
+  .runbar,
   .summary,
   .summary.three {
     grid-template-columns: 1fr;
+  }
+
+  .uploadBox,
+  .sampleBox,
+  .queryRow,
+  .actionRow {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .sidebar {
@@ -327,3 +558,12 @@ nav {
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

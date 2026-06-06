@@ -7,8 +7,10 @@ import {
   CheckCircle2,
   Database,
   FileSearch,
+  LoaderCircle,
   Route,
   ShieldCheck,
+  XCircle,
   Upload
 } from "lucide-react";
 import "./styles.css";
@@ -18,6 +20,8 @@ const NAV_ITEMS = [
   { id: "analyze", label: "Analyze", icon: FileSearch },
   { id: "datastore", label: "Datastore", icon: Database }
 ];
+
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 function App() {
   const [page, setPage] = useState("home");
@@ -113,11 +117,142 @@ function HomePage({ onStart }) {
 }
 
 function AnalyzePage() {
+  const [path, setPath] = useState("samples/clean_invoice.txt");
+  const [file, setFile] = useState(null);
+  const [run, setRun] = useState(null);
+  const [documentText, setDocumentText] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function analyzePath(nextPath = path) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await requestJson("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: nextPath })
+      });
+      await setCurrentRun(normalizeRun(result));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function analyzeUpload() {
+    if (!file) {
+      setError("Choose a document first.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("document", file);
+      const result = await requestJson("/api/runs", { method: "POST", body: formData });
+      await setCurrentRun(normalizeRun(result));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function takeAction(action) {
+    if (!run?.id) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await requestJson(`/api/runs/${run.id}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, note })
+      });
+      setRun(result);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setCurrentRun(nextRun) {
+    setRun(nextRun);
+    setDocumentText("");
+    if (!nextRun?.id) {
+      return;
+    }
+    try {
+      const document = await requestJson(`/api/runs/${nextRun.id}/document`);
+      if (document.type === "text") {
+        setDocumentText(document.content);
+      }
+    } catch {
+      setDocumentText("");
+    }
+  }
+
   return (
-    <section className="placeholder panel">
-      <h2><FileSearch size={18} />Analyze</h2>
-      <p className="muted">Single-invoice and batch analysis workflows will be added in the next commits.</p>
-    </section>
+    <>
+      {busy ? (
+        <div className="processingBanner">
+          <LoaderCircle className="spin" size={18} />
+          Running invoice analysis
+        </div>
+      ) : null}
+      <section className="pageHeader">
+        <div>
+          <p className="eyebrow">Analyze / Single invoice</p>
+          <h1>Review one invoice with evidence.</h1>
+        </div>
+      </section>
+
+      <section className="runbar">
+        <div className="sampleBox">
+          <input value={path} onChange={(event) => setPath(event.target.value)} />
+          <button onClick={() => analyzePath()} disabled={busy}>
+            <FileSearch size={18} /> Analyze Path
+          </button>
+          <button className="ghost" onClick={() => analyzePath("samples/messy_invoice.txt")} disabled={busy}>
+            <ShieldCheck size={18} /> Messy Sample
+          </button>
+        </div>
+        <div className="uploadBox">
+          <Upload size={20} />
+          <input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+          <button onClick={analyzeUpload} disabled={busy}>
+            <Upload size={18} /> Analyze Upload
+          </button>
+        </div>
+      </section>
+
+      {error ? <div className="error">{error}</div> : null}
+
+      <RunSummary run={run} />
+
+      <section className="contentGrid">
+        <Panel title="Invoice Details" icon={<Database size={18} />}>
+          <FieldTable rows={run?.fields || objectFields(run?.extraction?.fields)} />
+        </Panel>
+        <Panel title="Validation Result" icon={<CheckCircle2 size={18} />}>
+          <ValidationList rows={run?.validations || []} />
+        </Panel>
+      </section>
+
+      <section className="contentGrid">
+        <Panel title="Source & Evidence" icon={<FileSearch size={18} />}>
+          <DocumentEvidence run={run} documentText={documentText} />
+        </Panel>
+        <Panel title="CG Action" icon={<Route size={18} />}>
+          <ActionPanel run={run} note={note} setNote={setNote} onAction={takeAction} />
+        </Panel>
+      </section>
+    </>
   );
 }
 
@@ -157,5 +292,144 @@ function Feature({ title, text }) {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+function RunSummary({ run }) {
+  return (
+    <section className="summary">
+      <Metric icon={<FileSearch size={20} />} label="Document" value={run?.document_name || "No report open"} />
+      <Metric icon={<ShieldCheck size={20} />} label="Status" value={statusLabel(run?.review_status)} />
+      <Metric icon={<CheckCircle2 size={20} />} label="Decision" value={run?.decision_outcome || run?.decision?.outcome || "-"} />
+      <Metric icon={<XCircle size={20} />} label="Closed" value={run?.closed_at ? "Yes" : "No"} />
+    </section>
+  );
+}
 
+function FieldTable({ rows }) {
+  if (!rows?.length) {
+    return <p className="muted">Run an invoice to see extracted fields.</p>;
+  }
+  return (
+    <div className="table">
+      {rows.map((field) => (
+        <div className="fieldRow" key={field.name}>
+          <strong>{labelize(field.name)}</strong>
+          <span>{field.value || "Missing"}</span>
+          <small>{Number(field.confidence || 0).toFixed(2)}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ValidationList({ rows }) {
+  if (!rows?.length) {
+    return <p className="muted">No validation result yet.</p>;
+  }
+  return (
+    <div className="validationList">
+      {rows.map((item) => (
+        <article className={`validation ${item.status}`} key={item.field_name}>
+          <div>
+            <strong>{labelize(item.field_name)}</strong>
+            <span>{item.reason}</span>
+          </div>
+          <div className="validationMeta">
+            <span>{item.status}</span>
+            {item.status !== "match" ? <small>Found: {item.found || "-"} / Expected: {item.expected || "-"}</small> : null}
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function DocumentEvidence({ run, documentText }) {
+  const issues = (run?.validations || []).filter((item) => item.status !== "match");
+  if (!run) {
+    return <p className="muted">Run an invoice to inspect source text and evidence snippets.</p>;
+  }
+  return (
+    <div className="evidenceStack">
+      <div className="documentPreview">
+        {documentText ? <pre>{documentText}</pre> : <p className="muted">Text preview is available for text-like documents. Snippets are shown below.</p>}
+      </div>
+      <div className="snippetList">
+        <strong>Problem Evidence</strong>
+        {issues.length ? (
+          issues.map((item) => (
+            <article className="snippet" key={item.field_name}>
+              <span>{labelize(item.field_name)}</span>
+              <small>{item.source_snippet || "No source snippet captured."}</small>
+            </article>
+          ))
+        ) : (
+          <p className="muted">No field-level issues for this invoice.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActionPanel({ run, note, setNote, onAction }) {
+  if (!run) {
+    return <p className="muted">Open a report to approve, reject, or close it.</p>;
+  }
+  return (
+    <div className="actionPanel">
+      <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Reviewer note for rejection email or audit trail" />
+      <div className="actionRow">
+        <button onClick={() => onAction("approved")}>
+          <CheckCircle2 size={18} /> Approve
+        </button>
+        <button className="danger" onClick={() => onAction("rejected")}>
+          <XCircle size={18} /> Reject
+        </button>
+        <button className="ghost" onClick={() => onAction("close")}>
+          Close Report
+        </button>
+      </div>
+      <div className="mailDraft">
+        <strong>Default mail draft</strong>
+        <pre>{run.action_email || run.draft_message || run.decision?.draft_message || "Approve or reject to generate a supplier mail draft."}</pre>
+      </div>
+    </div>
+  );
+}
+
+async function requestJson(path, options) {
+  const response = await fetch(`${API_BASE}${path}`, options);
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "Request failed");
+  }
+  return payload;
+}
+
+function normalizeRun(result) {
+  if (!result.extraction) {
+    return result;
+  }
+  return {
+    ...result,
+    decision_outcome: result.decision?.outcome,
+    reasoning: result.decision?.reasoning,
+    draft_message: result.decision?.draft_message,
+    fields: objectFields(result.extraction.fields)
+  };
+}
+
+function objectFields(fields = {}) {
+  return Object.values(fields || {});
+}
+
+function statusLabel(status) {
+  if (!status) {
+    return "-";
+  }
+  return status.replaceAll("_", " ");
+}
+
+function labelize(value) {
+  return String(value || "").replaceAll("_", " ");
+}
+
+createRoot(document.getElementById("root")).render(<App />);
