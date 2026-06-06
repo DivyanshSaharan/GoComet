@@ -13,6 +13,7 @@ export function DatastorePage() {
   const [question, setQuestion] = useState("how many shipments were flagged this week?");
   const [queryResult, setQueryResult] = useState(null);
   const [queryBusy, setQueryBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -77,8 +78,7 @@ export function DatastorePage() {
   }
 
   async function removeRun(runId) {
-    const confirmed = window.confirm("Delete this invoice from the datastore?");
-    if (!confirmed) {
+    if (!runId) {
       return;
     }
     setBusy(true);
@@ -97,6 +97,7 @@ export function DatastorePage() {
         return next;
       });
       setOpenId("");
+      setDeleteTarget(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -187,7 +188,7 @@ export function DatastorePage() {
                     {detail ? (
                       <div className="inlineDetails">
                         <div className="deletePanel">
-                          <button className="danger" onClick={() => removeRun(run.id)} disabled={busy}>
+                          <button className="danger" onClick={() => setDeleteTarget(run)} disabled={busy}>
                             <Trash2 size={18} /> Delete invoice
                           </button>
                         </div>
@@ -226,6 +227,22 @@ export function DatastorePage() {
           }) : <p className="muted">No invoice records match the current filters.</p>}
         </div>
       </section>
+
+      {deleteTarget ? (
+        <div className="modalBackdrop" role="presentation">
+          <div className="confirmModal" role="dialog" aria-modal="true" aria-labelledby="deleteInvoiceTitle">
+            <h2 id="deleteInvoiceTitle">Delete invoice?</h2>
+            <p>Are you sure you want to delete this invoice from the datastore?</p>
+            <strong>{deleteTarget.document_name}</strong>
+            <div className="modalActions">
+              <button className="ghost" onClick={() => setDeleteTarget(null)} disabled={busy}>Cancel</button>
+              <button className="danger" onClick={() => removeRun(deleteTarget.id)} disabled={busy}>
+                <Trash2 size={18} /> Delete invoice
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
