@@ -134,6 +134,40 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(field.source_snippet, "")
         self.assertTrue(result.warnings)
 
+    def test_image_extraction_keeps_visual_snippet_confidence(self) -> None:
+        payload = {
+            "fields": {
+                "invoice_number": {
+                    "value": "INV-9999",
+                    "confidence": 0.94,
+                    "source_snippet": "Invoice Number: INV-9999",
+                }
+            }
+        }
+        result = ExtractorAgent(use_llm=False)._payload_to_result(
+            ROOT / "samples" / "Gemini_Generated_Image_2zmdpz2zmdpz2zmd.png",
+            "",
+            payload,
+            "gemini-vision",
+        )
+
+        field = result.fields["invoice_number"]
+        self.assertEqual(field.confidence, 0.94)
+        self.assertEqual(field.source_snippet, "Invoice Number: INV-9999")
+
+    def test_extraction_caps_values_without_evidence(self) -> None:
+        payload = {"fields": {"invoice_number": {"value": "INV-9999", "confidence": 0.94}}}
+        result = ExtractorAgent(use_llm=False)._payload_to_result(
+            ROOT / "samples" / "Gemini_Generated_Image_2zmdpz2zmdpz2zmd.png",
+            "",
+            payload,
+            "gemini-vision",
+        )
+
+        field = result.fields["invoice_number"]
+        self.assertEqual(field.confidence, 0.45)
+        self.assertEqual(field.source_snippet, "")
+
     def test_validator_requires_source_evidence(self) -> None:
         fields = {}
         for name in [

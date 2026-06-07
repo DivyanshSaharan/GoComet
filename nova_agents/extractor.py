@@ -27,6 +27,8 @@ FIELD_PATTERNS = {
     "invoice_number": r"Invoice(?: Number| No\.?)?:\s*([A-Z0-9\-\/]+)",
 }
 
+EVIDENCELESS_CONFIDENCE_CAP = 0.45
+
 
 class ExtractorAgent:
     def __init__(self, use_llm: bool | None = None) -> None:
@@ -151,7 +153,7 @@ class ExtractorAgent:
             confidence = self._safe_confidence(item.get("confidence"))
             verified = self._snippet_is_grounded(text, source_snippet)
             if value and not verified:
-                confidence = min(confidence, 0.69)
+                confidence = min(confidence, EVIDENCELESS_CONFIDENCE_CAP)
                 if source_snippet:
                     warnings.append(f"{name} source snippet was not found in extracted document text.")
                 else:
@@ -199,6 +201,6 @@ class ExtractorAgent:
         if not snippet:
             return False
         if not text.strip():
-            return False
+            return True
         normalized_text = " ".join(text.split()).lower()
         return snippet.lower() in normalized_text
