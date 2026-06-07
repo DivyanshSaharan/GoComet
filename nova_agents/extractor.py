@@ -143,16 +143,27 @@ class ExtractorAgent:
         if "fields" in payload and isinstance(payload["fields"], dict):
             payload = payload["fields"]
         fields = {}
+        warnings = []
         for name in REQUIRED_FIELDS:
             item = payload.get(name) or {}
+            value = item.get("value")
+            source_snippet = item.get("source_snippet") or ""
+            confidence = self._safe_confidence(item.get("confidence"))
+            verified = self._snippet_is_grounded(text, source_snippet)
+            if value and not verified:
+                confidence = min(confidence, 0.69)
+                if source_snippet:
+                    warnings.append(f"{name} source snippet was not found in extracted document text.")
+                else:
+                    warnings.append(f"{name} has no source snippet from the document.")
             fields[name] = ExtractedField(
                 name=name,
-                value=item.get("value"),
-                confidence=float(item.get("confidence") or 0),
-                source_snippet=item.get("source_snippet") or "",
+                value=value,
+                confidence=confidence,
+                source_snippet=source_snippet if verified else "",
                 evidence=provider,
             )
-        return ExtractionResult(path.name, fields, provider=provider, raw_text=text)
+        return ExtractionResult(path.name, fields, provider=provider, raw_text=text, warnings=warnings)
 
     def _parse_payload(self, content: str) -> dict:
         cleaned = content.strip()
@@ -175,3 +186,19 @@ class ExtractorAgent:
         start = max(index - 60, 0)
         end = min(index + len(value) + 60, len(text))
         return " ".join(text[start:end].split())
+
+    def _safe_confidence(self, value: object) -> float:
+        try:
+            confidence = float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(confidence, 1.0))
+
+    def _snippet_is_grounded(self, text: str, source_snippet: str) -> bool:
+        snippet = " ".join(source_snippet.split())
+        if not snippet:
+            return False
+        if not text.strip():
+            return False
+        normalized_text = " ".join(text.split()).lower()
+        return snippet.lower() in normalized_text

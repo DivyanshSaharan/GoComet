@@ -103,13 +103,36 @@ class PipelineTest(unittest.TestCase):
         )
         result = ExtractorAgent(use_llm=False)._payload_to_result(
             ROOT / "samples" / "clean_invoice.txt",
-            "",
+            "Invoice Number: INV-1",
             payload,
             "test",
         )
 
         self.assertEqual(result.fields["invoice_number"].value, "INV-1")
         self.assertEqual(result.fields["invoice_number"].source_snippet, "Invoice Number: INV-1")
+
+    def test_llm_extraction_downgrades_ungrounded_source_snippet(self) -> None:
+        payload = {
+            "fields": {
+                "invoice_number": {
+                    "value": "INV-9999",
+                    "confidence": 0.97,
+                    "source_snippet": "Invoice Number: INV-9999",
+                }
+            }
+        }
+        result = ExtractorAgent(use_llm=False)._payload_to_result(
+            ROOT / "samples" / "clean_invoice.txt",
+            "Invoice Number: INV-24031",
+            payload,
+            "test-llm",
+        )
+
+        field = result.fields["invoice_number"]
+        self.assertEqual(field.value, "INV-9999")
+        self.assertLess(field.confidence, 0.7)
+        self.assertEqual(field.source_snippet, "")
+        self.assertTrue(result.warnings)
 
     def test_validator_requires_source_evidence(self) -> None:
         fields = {}
